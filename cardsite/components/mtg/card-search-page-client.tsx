@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Search, Calendar, Filter, ArrowUpDown, X, Settings } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { formatReleaseDate, isUpcoming, getDaysLeft, getRarityColor } from '@/lib/utils/date-helpers';
 
 interface CardSearchPageClientProps {
   initialSets: MTGSet[];
@@ -112,16 +113,7 @@ const CardResults = React.memo(({ searchQuery }: { searchQuery: string }) => {
 
 CardResults.displayName = 'CardResults';
 
-// Helper function moved outside component
-const getRarityColor = (rarity: string) => {
-  switch (rarity) {
-    case 'common': return 'text-gray-400';
-    case 'uncommon': return 'text-gray-300';
-    case 'rare': return 'text-yellow-400';
-    case 'mythic': return 'text-orange-500';
-    default: return 'text-gray-400';
-  }
-};
+// Helper function moved to centralized utils
 
 export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps) {
   const [searchQuery, setSearchQuery] = useState('');
