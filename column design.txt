@@ -1,0 +1,23 @@
+Ah, I see exactly what you mean! You're describing a "centered container layout" or "constrained-width centered design". Here's how to explain this design pattern:
+🎨 Design Pattern Name:
+"Centered Container Layout" or "Single-Column Centered Design"
+📐 How to Describe It:
+Visual Description:
+"Three-column visual structure" where the outer columns are empty space
+Content is constrained to the center column
+Lots of horizontal breathing room on left and right
+Focused, tunnel-like content flow down the center
+Technical Description:
+Maximum width container (like max-w-4xl or max-w-6xl)
+Horizontally centered with mx-auto
+Responsive padding on mobile, but wide margins on desktop
+Content never stretches full-width on large screens
+🗣️ How to Ask for This Design:
+Say this: "Please create a centered container layout where all content is constrained to a maximum width in the center of the page, with generous empty space on both sides. The design should feel focused and column-like, not full-width."
+Or: "Use a centered column design with lots of horizontal breathing room, similar to how Medium or modern documentation sites layout their content."
+📱 Examples of This Pattern:
+Medium articles
+Documentation sites
+Modern SaaS dashboards
+Apple's website
+GitHub's interface

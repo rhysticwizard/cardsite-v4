@@ -1,0 +1,13 @@
+{
+  "name": "cardsite-v4-workspace",
+  "version": "1.0.0",
+  "description": "MTG Community Hub Workspace",
+  "scripts": {
+    "dev": "cd cardsite && npm run dev",
+    "build": "cd cardsite && npm run build",
+    "start": "cd cardsite && npm run start",
+    "lint": "cd cardsite && npm run lint",
+    "install-deps": "cd cardsite && npm install"
+  },
+  "private": true
+} 
