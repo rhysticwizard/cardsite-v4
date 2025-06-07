@@ -1,7 +1,7 @@
 import { config } from 'dotenv'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import { drizzle } from 'drizzle-orm/postgres-js'
-import postgres from 'postgres'
+import * as postgres from 'postgres'
 
 // Load environment variables from .env.local
 config({ path: '.env.local' })
@@ -11,7 +11,7 @@ async function main() {
     throw new Error('DATABASE_URL is not set')
   }
 
-  const client = postgres(process.env.DATABASE_URL, { max: 1 })
+  const client = postgres.default(process.env.DATABASE_URL, { max: 1 })
   const db = drizzle(client)
 
   console.log('Running migrations...')
