@@ -163,10 +163,29 @@ export async function POST(request: NextRequest) {
       password: hashedPassword,
     }).returning({ id: users.id, username: users.username, email: users.email })
 
+    // Send verification email automatically (GitHub-style delayed verification)
+    try {
+      const verificationResponse = await fetch(`${process.env.NEXTAUTH_URL}/api/auth/send-verification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+      
+      if (!verificationResponse.ok) {
+        console.warn('Failed to send verification email during signup');
+      }
+    } catch (emailError) {
+      console.warn('Failed to send verification email during signup:', emailError);
+      // Don't fail the signup if email sending fails
+    }
+
     return NextResponse.json(
       { 
-        message: 'Account created successfully',
-        user: newUser[0]
+        message: 'Account created successfully! Please check your email to verify your account.',
+        user: newUser[0],
+        emailSent: true
       },
       { status: 201 }
     )

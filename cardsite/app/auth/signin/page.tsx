@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Icons } from '../../../components/ui/icons';
 import { useRouter } from 'next/navigation';
 import { AlertCircle, Eye, EyeOff } from 'lucide-react';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -48,7 +49,24 @@ function AvailabilityChecker({ value, type, isValid = true }: { value: string, t
   const [error, setError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
-    if (!value || !isValid) {
+    if (!value) {
+      setIsAvailable(null)
+      setError(null)
+      return
+    }
+
+    // For email, only check availability if format is valid (silent validation)
+    if (type === 'email') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(value)) {
+        setIsAvailable(null)
+        setError(null)
+        return // Don't show error, just don't check availability
+      }
+    }
+
+    // Don't check if other validation failed
+    if (!isValid) {
       setIsAvailable(null)
       setError(null)
       return
@@ -81,7 +99,7 @@ function AvailabilityChecker({ value, type, isValid = true }: { value: string, t
     return () => clearTimeout(timeoutId)
   }, [value, type, isValid])
 
-  if (!value || !isValid) return null
+  if (!value) return null
 
   return (
     <div className="flex items-center space-x-2">
@@ -123,12 +141,15 @@ function PasswordStrength({ password }: { password: string }) {
     if (!password || password.length < 8) {
       setHibpResult(null)
       setHibpCheckCompleted(false)
+      setIsCheckingHibp(false)
       return
     }
 
+    // Show spinner immediately when 8+ characters
+    setIsCheckingHibp(true)
     setHibpCheckCompleted(false)
+    
     const timeoutId = setTimeout(async () => {
-      setIsCheckingHibp(true)
       try {
         // Simple HIBP check without importing the library
         const response = await fetch('/api/auth/check-password', {
@@ -557,6 +578,15 @@ export default function SignInPage() {
               {/* Show generic error for sign-in mode */}
               {!isSignUp && signInForm.formState.errors.password && (
                 <p className="text-red-400 text-sm">{signInForm.formState.errors.password.message}</p>
+              )}
+              
+              {/* Forgot Password Link - Only show in sign-in mode */}
+              {!isSignUp && (
+                <div className="text-right">
+                  <Link href="/auth/forgot-password" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
+                    Forgot your password?
+                  </Link>
+                </div>
               )}
             </div>
 

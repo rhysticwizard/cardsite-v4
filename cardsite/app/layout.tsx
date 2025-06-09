@@ -5,6 +5,7 @@ import "./globals.css";
 import { Navigation } from "@/components/ui/navigation";
 import { Sidebar } from "@/components/ui/sidebar";
 import { Providers } from "./providers";
+import { EmailVerificationBanner } from "@/components/auth/email-verification-banner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,6 +34,7 @@ export default function RootLayout({
       >
         <Providers>
           <Navigation />
+          <EmailVerificationBanner />
           <div className="flex">
             <Sidebar />
             <main className="ml-32 pt-16 min-h-screen w-full">

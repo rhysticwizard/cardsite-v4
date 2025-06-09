@@ -15,7 +15,12 @@ declare module 'next-auth' {
       name?: string | null
       email?: string | null
       image?: string | null
+      emailVerified?: Date | null
     }
+  }
+  
+  interface User {
+    emailVerified?: Date | null
   }
 }
 
@@ -58,6 +63,7 @@ export const authOptions: NextAuthOptions = {
             email: foundUser.email,
             name: foundUser.name,
             image: foundUser.image,
+            emailVerified: foundUser.emailVerified,
           }
         } catch (error) {
           // Don't expose error details to user for security
@@ -91,12 +97,14 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user && token) {
         session.user.id = token.id as string
+        session.user.emailVerified = token.emailVerified as Date | null
       }
       return session
     },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
+        token.emailVerified = user.emailVerified
       }
       return token
     },

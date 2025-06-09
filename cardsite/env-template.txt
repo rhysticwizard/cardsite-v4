@@ -6,4 +6,5 @@ DISCORD_CLIENT_ID=from_discord_developer_portal
 DISCORD_CLIENT_SECRET=from_discord_developer_portal
 GOOGLE_CLIENT_ID=from_google_cloud_console
 GOOGLE_CLIENT_SECRET=from_google_cloud_console
-DATABASE_URL=postgresql://user:pass@host:port/db 
+DATABASE_URL=postgresql://user:pass@host:port/db
+RESEND_API_KEY=your_resend_api_key_here 
