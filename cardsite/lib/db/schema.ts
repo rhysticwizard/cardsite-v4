@@ -1,15 +1,15 @@
-import { pgTable, text, serial, timestamp, integer, boolean, jsonb, uuid, varchar, decimal } from 'drizzle-orm/pg-core'
+import { pgTable, text, serial, timestamp, integer, boolean, jsonb, uuid, varchar, decimal, primaryKey } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
-// Users table for authentication
+// Users table for NextAuth.js authentication
 export const users = pgTable('users', {
-  id: text('id').primaryKey(),
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text('name'),
-  email: text('email').notNull(),
+  username: text('username').unique(), // Unique username for the platform
+  email: text('email').notNull().unique(),
   emailVerified: timestamp('emailVerified', { mode: 'date' }),
   image: text('image'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  password: text('password'), // For email/password authentication
 })
 
 // MTG Cards table - stores card information from Scryfall
@@ -83,7 +83,10 @@ export const accounts = pgTable('accounts', {
   scope: text('scope'),
   id_token: text('id_token'),
   session_state: text('session_state'),
-})
+}, (table) => ({
+  // Composite primary key for NextAuth compatibility
+  pk: primaryKey({ columns: [table.provider, table.providerAccountId] }),
+}))
 
 export const sessions = pgTable('sessions', {
   sessionToken: text('sessionToken').primaryKey(),
