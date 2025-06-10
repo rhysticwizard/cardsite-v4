@@ -383,6 +383,7 @@ export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
+  const [retryCountdown, setRetryCountdown] = useState(0);
 
   const signUpForm = useForm<SignUpForm>({
     resolver: zodResolver(signUpSchema),
@@ -445,17 +446,49 @@ export default function SignInPage() {
     setIsLoading(true);
     setError('');
 
-    const result = await signIn('credentials', {
-      email: data.email,
-      password: data.password,
-      redirect: false,
-    });
+    try {
+      console.log('🔍 Starting signin attempt...');
+      
+      // Proceed directly with signin - rate limiting is handled in the backend
+      const result = await signIn('credentials', {
+        email: data.email,
+        password: data.password,
+        redirect: false,
+      });
+      
+      console.log('🔐 Signin result:', result);
 
-    if (result?.error) {
-      // Generic error message for security (don't reveal if email exists)
-      setError('Invalid credentials. Please check your email and password.');
-    } else {
-      router.push('/');
+      if (result?.error) {
+        // Check if the error contains rate limiting information
+        if (result.error.includes('Rate limit')) {
+          const retryMatch = result.error.match(/(\d+) seconds/);
+          const retryAfter = retryMatch ? parseInt(retryMatch[1]) : 60;
+          
+          setRetryCountdown(retryAfter);
+          setError('Too many signin attempts');
+          
+          const countdownInterval = setInterval(() => {
+            setRetryCountdown((prev) => {
+              if (prev <= 1) {
+                clearInterval(countdownInterval);
+                setError('');
+                return 0;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+        } else {
+          // Generic error message for security (don't reveal if email exists)
+          setError('Invalid credentials. Please check your email and password.');
+        }
+      } else if (result?.ok) {
+        router.push('/');
+      } else {
+        setError('An error occurred. Please try again.');
+      }
+    } catch (error) {
+      console.error('❌ Signin error:', error);
+      setError('An error occurred. Please try again.');
     }
     
     setIsLoading(false);
@@ -618,12 +651,14 @@ export default function SignInPage() {
 
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium py-3"
-              disabled={isLoading}
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isLoading || retryCountdown > 0}
             >
-              {isLoading 
-                ? (isSignUp ? 'Creating Account...' : 'Signing In...') 
-                : (isSignUp ? 'Create Account' : 'Sign In')
+              {retryCountdown > 0 
+                ? `Wait ${retryCountdown}s...`
+                : isLoading 
+                  ? (isSignUp ? 'Creating Account...' : 'Signing In...') 
+                  : (isSignUp ? 'Create Account' : 'Sign In')
               }
             </Button>
           </form>

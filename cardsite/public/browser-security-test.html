@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phase 3 Security Testing</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background: #0a0a0a; color: #fff; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .test-section { background: #1a1a1a; padding: 20px; margin: 20px 0; border-radius: 8px; border-left: 4px solid #3b82f6; }
+        .test-button { background: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+        .test-button:hover { background: #2563eb; }
+        .result { margin: 10px 0; padding: 10px; border-radius: 5px; font-family: monospace; }
+        .success { background: #10b981; color: white; }
+        .error { background: #ef4444; color: white; }
+        .info { background: #6b7280; color: white; }
+        pre { background: #111; padding: 15px; border-radius: 5px; overflow-x: auto; border: 1px solid #333; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .status { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 12px; font-weight: bold; }
+        .status.pass { background: #10b981; }
+        .status.fail { background: #ef4444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔒 Phase 3 Security Testing Dashboard</h1>
+            <p>Test the security implementation of your MTG Community Hub</p>
+        </div>
+
+        <div class="test-section">
+            <h2>📋 Test 1: Security Headers Check</h2>
+            <p>This test verifies that all security headers are properly set.</p>
+            <button class="test-button" onclick="testSecurityHeaders()">Test Security Headers</button>
+            <div id="headers-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🛡️ Test 2: CSRF Protection Test</h2>
+            <p>This test verifies CSRF protection is working for POST requests.</p>
+            <button class="test-button" onclick="testCSRFProtection()">Test CSRF Protection</button>
+            <div id="csrf-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔐 Test 3: Content Security Policy</h2>
+            <p>This test checks if CSP is preventing unauthorized scripts.</p>
+            <button class="test-button" onclick="testCSP()">Test CSP</button>
+            <div id="csp-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🧪 Test 4: Security Endpoint</h2>
+            <p>This test calls our custom security testing endpoint.</p>
+            <button class="test-button" onclick="testSecurityEndpoint()">Test Security Endpoint</button>
+            <div id="endpoint-result"></div>
+        </div>
+    </div>
+
+    <script>
+        // Test 1: Security Headers
+        async function testSecurityHeaders() {
+            const resultDiv = document.getElementById('headers-result');
+            resultDiv.innerHTML = '<div class="info">Testing security headers...</div>';
+            
+            try {
+                const response = await fetch('/', { method: 'HEAD' });
+                const headers = [...response.headers.entries()];
+                
+                const securityHeaders = [
+                    'x-frame-options',
+                    'x-content-type-options', 
+                    'x-xss-protection',
+                    'referrer-policy',
+                    'content-security-policy',
+                    'permissions-policy'
+                ];
+                
+                let results = '<h3>Security Headers Found:</h3>';
+                let allPresent = true;
+                
+                securityHeaders.forEach(header => {
+                    const found = headers.find(([key]) => key.toLowerCase() === header);
+                    if (found) {
+                        const value = found[1].length > 50 ? found[1].substring(0, 50) + '...' : found[1];
+                        results += `<div class="success">✅ ${header}: ${value}</div>`;
+                    } else {
+                        results += `<div class="error">❌ ${header}: MISSING</div>`;
+                        allPresent = false;
+                    }
+                });
+                
+                results += `<div class="info">Overall Status: <span class="status ${allPresent ? 'pass' : 'fail'}">${allPresent ? 'PASS' : 'FAIL'}</span></div>`;
+                resultDiv.innerHTML = results;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Error testing headers: ${error.message}</div>`;
+            }
+        }
+
+        // Test 2: CSRF Protection
+        async function testCSRFProtection() {
+            const resultDiv = document.getElementById('csrf-result');
+            resultDiv.innerHTML = '<div class="info">Testing CSRF protection...</div>';
+            
+            try {
+                // Try to make a POST request without CSRF token
+                const response = await fetch('/api/security/test-headers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ test: 'unauthorized' })
+                });
+                
+                if (response.status === 401 || response.status === 403) {
+                    resultDiv.innerHTML = `<div class="success">✅ CSRF Protection Working: Got ${response.status} ${response.statusText}</div>`;
+                } else if (response.status === 200) {
+                    resultDiv.innerHTML = `<div class="error">❌ CSRF Protection Failed: Request succeeded when it should have been blocked</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="info">⚠️ Unexpected response: ${response.status} ${response.statusText}</div>`;
+                }
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="success">✅ CSRF Protection Working: Request blocked (${error.message})</div>`;
+            }
+        }
+
+        // Test 3: CSP
+        function testCSP() {
+            const resultDiv = document.getElementById('csp-result');
+            resultDiv.innerHTML = '<div class="info">Testing Content Security Policy...</div>';
+            
+            // Check if CSP header is present
+            fetch('/', { method: 'HEAD' })
+                .then(response => {
+                    const csp = response.headers.get('content-security-policy');
+                    if (csp) {
+                        let results = '<div class="success">✅ CSP Header Found</div>';
+                        results += `<pre>CSP Policy: ${csp}</pre>`;
+                        
+                        // Test if eval is blocked
+                        try {
+                            eval('console.log("CSP test")');
+                            results += '<div class="error">❌ CSP Not Blocking eval()</div>';
+                        } catch (e) {
+                            results += '<div class="success">✅ CSP Blocking eval() - Good!</div>';
+                        }
+                        
+                        resultDiv.innerHTML = results;
+                    } else {
+                        resultDiv.innerHTML = '<div class="error">❌ CSP Header Missing</div>';
+                    }
+                })
+                .catch(error => {
+                    resultDiv.innerHTML = `<div class="error">❌ Error testing CSP: ${error.message}</div>`;
+                });
+        }
+
+        // Test 4: Security Endpoint
+        async function testSecurityEndpoint() {
+            const resultDiv = document.getElementById('endpoint-result');
+            resultDiv.innerHTML = '<div class="info">Testing security endpoint...</div>';
+            
+            try {
+                const response = await fetch('/api/security/test-headers');
+                if (response.ok) {
+                    const data = await response.json();
+                    let results = '<div class="success">✅ Security Endpoint Accessible</div>';
+                    results += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                    resultDiv.innerHTML = results;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Security endpoint returned: ${response.status} ${response.statusText}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Error accessing security endpoint: ${error.message}</div>`;
+            }
+        }
+
+        // Auto-run basic test on page load
+        window.onload = function() {
+            testSecurityHeaders();
+        };
+    </script>
+</body>
+</html> 

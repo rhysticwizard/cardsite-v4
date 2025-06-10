@@ -5,6 +5,14 @@ import bcrypt from 'bcryptjs'
 import { eq, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { createHash } from 'crypto'
+import { checkRateLimit, getClientIP, createRateLimitError, RATE_LIMITS } from '@/lib/simple-rate-limit'
+// Monitoring temporarily disabled for testing
+// import { 
+//   trackSecurity, 
+//   trackPerformance, 
+//   trackError, 
+//   withTiming
+// } from '@/lib/monitoring'
 
 // Server-side HIBP check with k-anonymity
 async function checkPasswordBreach(password: string): Promise<{ isBreached: boolean; breachCount: number }> {
@@ -73,7 +81,38 @@ const signupSchema = z.object({
 })
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now()
+  const clientIP = getClientIP(request)
+  
   try {
+    // Rate limiting - 3 signup attempts per minute per IP
+    const rateLimitResult = checkRateLimit(clientIP, RATE_LIMITS.SIGNUP)
+    
+    if (!rateLimitResult.allowed) {
+      console.log(`🚫 Rate limit exceeded for signup from IP: ${clientIP}`)
+      
+      // trackSecurity('rate_limit', {
+      //   ipAddress: clientIP,
+      //   endpoint: 'signup',
+      //   retryAfter: rateLimitResult.retryAfter 
+      // })
+      
+      // trackPerformance('signup', Date.now() - startTime, false)
+      
+      return NextResponse.json(
+        createRateLimitError(rateLimitResult.retryAfter),
+        { 
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': RATE_LIMITS.SIGNUP.requests.toString(),
+            'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
+            'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
+            'Retry-After': rateLimitResult.retryAfter.toString(),
+          }
+        }
+      )
+    }
+
     const body = await request.json()
     
     // Validate input
@@ -181,6 +220,16 @@ export async function POST(request: NextRequest) {
       // Don't fail the signup if email sending fails
     }
 
+    // Track successful signup
+    // trackPerformance('signup', Date.now() - startTime, true)
+    
+    // trackSecurity('signup', {
+    //   userId: newUser[0].id,
+    //   email: newUser[0].email,
+    //   username: newUser[0].username,
+    //   ipAddress: clientIP
+    // })
+
     return NextResponse.json(
       { 
         message: 'Account created successfully! Please check your email to verify your account.',
@@ -191,6 +240,18 @@ export async function POST(request: NextRequest) {
     )
 
   } catch (error) {
+    // trackPerformance('signup', Date.now() - startTime, false)
+    
+    // trackSecurity('failed_login', {
+    //   ipAddress: clientIP,
+    //   error: error instanceof Error ? error.message : 'Unknown error'
+    // })
+    
+    // trackError('Signup failed', error as Error, {
+    //   endpoint: 'signup',
+    //   ipAddress: clientIP
+    // })
+    
     return NextResponse.json(
       { error: 'Failed to create account' },
       { status: 500 }

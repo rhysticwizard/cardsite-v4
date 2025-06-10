@@ -3,6 +3,7 @@ import { db } from '@/lib/db/index'
 import { users, verificationTokens } from '@/lib/db/schema'
 import { eq, and, sql } from 'drizzle-orm'
 import { z } from 'zod'
+import { checkRateLimit, getClientIP, createRateLimitError, RATE_LIMITS } from '@/lib/simple-rate-limit'
 
 const verifyEmailSchema = z.object({
   token: z.string().min(1, 'Verification token is required'),
@@ -10,6 +11,26 @@ const verifyEmailSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting - 5 email verification attempts per minute per IP
+    const clientIP = getClientIP(request)
+    const rateLimitResult = checkRateLimit(`verify-email:${clientIP}`, RATE_LIMITS.SIGNIN)
+    
+    if (!rateLimitResult.allowed) {
+      console.log(`🚫 Rate limit exceeded for email verification from IP: ${clientIP}`)
+      return NextResponse.json(
+        createRateLimitError(rateLimitResult.retryAfter),
+        { 
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': RATE_LIMITS.SIGNIN.requests.toString(),
+            'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
+            'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
+            'Retry-After': rateLimitResult.retryAfter.toString(),
+          }
+        }
+      )
+    }
+
     const body = await request.json()
     
     // Validate input
