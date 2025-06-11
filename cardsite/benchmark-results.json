@@ -1,0 +1,141 @@
+{
+  "timestamp": "2025-06-10T23:08:47.142Z",
+  "environment": {
+    "nodeVersion": "v22.15.0",
+    "platform": "win32",
+    "memory": {
+      "rss": 95547392,
+      "heapTotal": 25112576,
+      "heapUsed": 14284576,
+      "external": 2817954,
+      "arrayBuffers": 88507
+    }
+  },
+  "benchmark": {
+    "results": [
+      {
+        "name": "User Queries",
+        "duration": 22393,
+        "throughput": 4.4656812396731125,
+        "memoryUsage": -24,
+        "errorRate": 0,
+        "details": {
+          "iterations": 100,
+          "averageLatency": 223.93,
+          "errors": 0,
+          "memoryDelta": -24
+        }
+      },
+      {
+        "name": "Card Search Queries",
+        "duration": 13375,
+        "throughput": 3.7383177570093458,
+        "memoryUsage": 1,
+        "errorRate": 0,
+        "details": {
+          "iterations": 50,
+          "averageLatency": 267.5,
+          "errors": 0,
+          "memoryDelta": 1
+        }
+      },
+      {
+        "name": "Collection Queries",
+        "duration": 13314,
+        "throughput": 5.633168093735917,
+        "memoryUsage": 2,
+        "errorRate": 0,
+        "details": {
+          "iterations": 75,
+          "averageLatency": 177.52,
+          "errors": 0,
+          "memoryDelta": 2
+        }
+      },
+      {
+        "name": "Deck Queries",
+        "duration": 10805,
+        "throughput": 5.552984729291994,
+        "memoryUsage": 0,
+        "errorRate": 0,
+        "details": {
+          "iterations": 60,
+          "averageLatency": 180.08333333333334,
+          "errors": 0,
+          "memoryDelta": 0
+        }
+      },
+      {
+        "name": "Complex JOIN Queries",
+        "duration": 2295,
+        "throughput": 10.893246187363834,
+        "memoryUsage": 0,
+        "errorRate": 0,
+        "details": {
+          "iterations": 25,
+          "averageLatency": 91.8,
+          "errors": 0,
+          "memoryDelta": 0
+        }
+      },
+      {
+        "name": "Write Operations",
+        "duration": 2747,
+        "throughput": 10.921004732435385,
+        "memoryUsage": 1,
+        "errorRate": 0,
+        "details": {
+          "iterations": 30,
+          "averageLatency": 91.56666666666666,
+          "errors": 0,
+          "memoryDelta": 1
+        }
+      },
+      {
+        "name": "Concurrent Queries",
+        "duration": 2713,
+        "throughput": 7.371913011426465,
+        "memoryUsage": 0,
+        "errorRate": 0,
+        "details": {
+          "iterations": 20,
+          "averageLatency": 135.65,
+          "errors": 0,
+          "memoryDelta": 0
+        }
+      },
+      {
+        "name": "Memory Stress Test",
+        "duration": 982,
+        "throughput": 10.183299389002038,
+        "memoryUsage": 0,
+        "errorRate": 0,
+        "details": {
+          "iterations": 10,
+          "averageLatency": 98.2,
+          "errors": 0,
+          "memoryDelta": 0
+        }
+      },
+      {
+        "name": "Connection Pool Stress",
+        "duration": 5336,
+        "throughput": 9.370314842578711,
+        "memoryUsage": -1,
+        "errorRate": 0,
+        "details": {
+          "iterations": 50,
+          "averageLatency": 106.72,
+          "errors": 0,
+          "memoryDelta": -1
+        }
+      }
+    ],
+    "summary": {
+      "totalDuration": 73963,
+      "averageThroughput": 7.569992220279644,
+      "peakMemory": 2,
+      "overallErrorRate": 0
+    }
+  }
+}

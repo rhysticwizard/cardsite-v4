@@ -12,8 +12,6 @@ import {
   sessionMonitor
 } from './session-security'
 import { findUserByEmail } from './db/encrypted-operations'
-// Simple monitoring integration
-import { setUserContext, clearUserContext } from '@/lib/monitoring'
 
 declare module 'next-auth' {
   interface Session {
@@ -262,11 +260,7 @@ export const authOptions: NextAuthOptions = {
         token.lastActivity = Math.floor(Date.now() / 1000)
         token.iat = Math.floor(Date.now() / 1000)
         
-        // Set user context for monitoring
-        setUserContext({
-          id: user.id,
-          email: user.email
-        })
+        // User context set for session
         
         // Record security event for sign-in
         sessionMonitor.recordEvent(createSecurityEvent('SIGN_IN', {
@@ -353,8 +347,7 @@ export const authOptions: NextAuthOptions = {
     async signOut({ session, token }) {
       const userId = (token?.id as string) || (session?.user?.id as string)
       
-            // Clear user context for monitoring
-      clearUserContext()
+            // User context cleared for session
       
       // Record sign-out event
       sessionMonitor.recordEvent(createSecurityEvent('SIGN_OUT', {

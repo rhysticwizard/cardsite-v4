@@ -6,7 +6,6 @@ import { Navigation } from "@/components/ui/navigation";
 import { Sidebar } from "@/components/ui/sidebar";
 import { Providers } from "./providers";
 import { EmailVerificationBanner } from "@/components/auth/email-verification-banner";
-import { MonitoringDashboard } from "@/components/monitoring-dashboard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,7 +41,6 @@ export default function RootLayout({
               {children}
             </main>
           </div>
-          <MonitoringDashboard />
         </Providers>
       </body>
     </html>

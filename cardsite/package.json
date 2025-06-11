@@ -9,7 +9,11 @@
     "lint": "next lint",
     "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:studio": "drizzle-kit studio --config=drizzle.config.ts"
+    "db:studio": "drizzle-kit studio --config=drizzle.config.ts",
+    "db:performance": "tsx scripts/test-db-performance.ts",
+    "performance:benchmark": "tsx scripts/performance-benchmark.ts",
+    "load:test-data": "tsx scripts/load-test-data.ts",
+    "cache:demo": "tsx scripts/cache-performance-demo.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.9.1",

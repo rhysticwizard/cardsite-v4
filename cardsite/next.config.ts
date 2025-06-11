@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Vercel deployment configuration (no output needed)
   // Performance optimizations
   experimental: {
     optimizePackageImports: ['@radix-ui/react-dialog', '@radix-ui/react-label', '@radix-ui/react-slot', 'lucide-react'],
