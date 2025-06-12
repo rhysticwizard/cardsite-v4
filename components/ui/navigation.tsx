@@ -3,7 +3,7 @@
 import { User, LogOut, Settings } from "lucide-react";
 import React from "react";
 import { useSession, signIn, signOut } from "next-auth/react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Button } from "./button";
 import {
   DropdownMenu,
@@ -18,7 +18,6 @@ import { EmailVerificationNotification } from "@/components/auth/email-verificat
 export const Navigation = React.memo(function Navigation() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const pathname = usePathname();
 
   if (status === "loading") {
     return (
@@ -85,15 +84,12 @@ export const Navigation = React.memo(function Navigation() {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          !pathname.startsWith('/auth') && (
-            <Button 
-              onClick={() => signIn()}
-              variant="ghost"
-              className="text-white hover:bg-gray-800"
-            >
-              Sign in
-            </Button>
-          )
+          <Button 
+            onClick={() => signIn()}
+            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
+          >
+            Sign in
+          </Button>
         )}
       </div>
     </nav>

@@ -1,8 +1,8 @@
-import { CardSearchTest } from "@/components/mtg/card-search-test";
+
 
 export default function Home() {
   return (
-    <div className="text-white min-h-screen">
+    <>
       {/* Centered Container with generous side margins */}
       <div className="max-w-4xl mx-auto px-8 py-12">
         {/* Top Section - Hero Cards */}
@@ -138,12 +138,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* API Integration Test */}
-        <div className="mb-12">
-          <h2 className="text-2xl font-bold mb-6 text-center">🧪 Scryfall API Integration</h2>
-          <CardSearchTest />
-        </div>
+
       </div>
-    </div>
+    </>
   );
 }

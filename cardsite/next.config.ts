@@ -53,6 +53,13 @@ const nextConfig: NextConfig = {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=(), interest-cohort=(), payment=(), usb=(), magnetometer=(), accelerometer=(), gyroscope=()',
           },
+          // Content Security Policy - relaxed for development to allow Stagewise
+          {
+            key: 'Content-Security-Policy',
+            value: process.env.NODE_ENV === 'development' 
+              ? `default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' http://localhost:* ws://localhost:* wss://localhost:*; connect-src 'self' https://api.scryfall.com https://cards.scryfall.io https://discord.com https://discordapp.com wss: ws: http://localhost:* ws://localhost:* wss://localhost:*; img-src 'self' data: https: http://localhost:*; style-src 'self' 'unsafe-inline'; font-src 'self' data:;`
+              : `default-src 'self'; script-src 'self'; connect-src 'self' https://api.scryfall.com https://cards.scryfall.io https://discord.com https://discordapp.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:;`
+          },
           // Production-only HSTS header
           ...(process.env.NODE_ENV === 'production' ? [{
             key: 'Strict-Transport-Security',

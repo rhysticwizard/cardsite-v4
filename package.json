@@ -9,5 +9,8 @@
     "lint": "cd cardsite && npm run lint",
     "install-deps": "cd cardsite && npm install"
   },
-  "private": true
-} 
+  "private": true,
+  "devDependencies": {
+    "drizzle-kit": "^0.31.1"
+  }
+}

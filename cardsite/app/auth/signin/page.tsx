@@ -361,13 +361,28 @@ function PasswordStrength({ password }: { password: string }) {
             })}
           </div>
           
-          {finalStrength.suggestions.length > 0 && (
+          {finalStrength.suggestions.filter(s => 
+            !s.includes('characters') && 
+            !s.includes('uppercase') && 
+            !s.includes('lowercase') && 
+            !s.includes('numbers') && 
+            !s.includes('special characters')
+          ).length > 0 && (
             <div className="space-y-1">
-              {finalStrength.suggestions.map((suggestion: string, index: number) => (
-                <p key={index} className="text-xs text-gray-400">
-                  • {suggestion}
-                </p>
-              ))}
+              {finalStrength.suggestions
+                .filter(s => 
+                  !s.includes('characters') && 
+                  !s.includes('uppercase') && 
+                  !s.includes('lowercase') && 
+                  !s.includes('numbers') && 
+                  !s.includes('special characters')
+                )
+                .map((suggestion: string, index: number) => (
+                  <p key={index} className="text-xs text-gray-400">
+                    • {suggestion}
+                  </p>
+                ))
+              }
             </div>
           )}
         </div>
@@ -509,12 +524,9 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
+    <div className="flex items-center justify-center min-h-screen p-4">
       <Card className="w-full max-w-md bg-gray-900/95 border border-gray-800 shadow-2xl">
         <CardHeader className="text-center space-y-2">
-          <div className="mx-auto w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center mb-4">
-            <Icons.logo className="w-6 h-6 text-white" />
-          </div>
           <CardTitle className="text-2xl font-bold text-white">
             {isSignUp ? 'Create Account' : 'Welcome Back'}
           </CardTitle>

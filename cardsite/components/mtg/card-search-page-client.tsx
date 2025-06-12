@@ -7,7 +7,7 @@ import type { MTGSet, MTGCard } from '@/lib/types/mtg';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Search, Calendar, Filter, ArrowUpDown, X, Settings } from 'lucide-react';
+import { Search, Calendar, Filter, ArrowUpDown, X, Settings, Sliders, Shuffle, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { formatReleaseDate, isUpcoming, getDaysLeft, getRarityColor } from '@/lib/utils/date-helpers';
@@ -117,101 +117,153 @@ CardResults.displayName = 'CardResults';
 
 export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'date' | 'name'>('date');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'a-z' | 'z-a'>('newest');
   const [filterBy, setFilterBy] = useState<'all' | 'upcoming' | 'released'>('all');
   const [searchMode, setSearchMode] = useState<'sets' | 'cards'>('sets');
   
   // Debounced search query for card searches
   const [debouncedCardQuery, setDebouncedCardQuery] = useState('');
 
-  // USE REACT QUERY FOR CACHING - This is the key fix!
-  const { data: allSets = initialSets, isLoading: setsLoading } = useQuery({
-    queryKey: ['mtg-sets'],
-    queryFn: getAllSets,
-    initialData: initialSets,
-    staleTime: 1000 * 60 * 30, // 30 minutes - same as your other pages
-    gcTime: 1000 * 60 * 60, // 1 hour garbage collection
+  // Sort dropdown state
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+
+  // Simple single API call to load all sets
+  const { 
+    data: allSets = [], 
+    isLoading: isBackgroundLoading,
+    isSuccess
+  } = useQuery({
+    queryKey: ['mtg-sets-all'],
+    queryFn: async () => {
+      console.log('🔄 Loading all Magic sets...');
+      const allSetsData = await getAllSets();
+      console.log(`✅ Loaded ${allSetsData.length} total sets`);
+      return allSetsData;
+    },
+    staleTime: 1000 * 60 * 30, // 30 minutes - data stays fresh
+    gcTime: 1000 * 60 * 60 * 24, // 24 hours - keep in cache longer
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    enabled: true, // Always enabled
   });
 
+
+  
+  // No suggestions needed for Enter-only search
+  
+
+
+
+
+  // Card search only triggers on Enter key press
+  const [pendingCardSearch, setPendingCardSearch] = useState('');
+
+  // Close dropdown when clicking outside
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedCardQuery(searchQuery);
-      // Switch to card search mode when user types a query
+    const handleClickOutside = () => setShowSortDropdown(false);
+    if (showSortDropdown) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showSortDropdown]);
+
+  // Handle Enter key press for search
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
       if (searchQuery.trim().length > 0) {
+        // Trigger search (both sets and cards)
+        setDebouncedCardQuery(searchQuery);
         setSearchMode('cards');
       } else {
+        // Empty search - show all sets
+        setDebouncedCardQuery('');
         setSearchMode('sets');
       }
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  // Group sets by year chronologically - using cached data
-  const setsByYear = useMemo(() => {
-    if (!allSets) return {};
-
-    let filtered = allSets.filter((set) => {
-      // Filter by search query (only when in sets mode)
-      if (searchMode === 'sets' && searchQuery) {
-        const query = searchQuery.toLowerCase();
-        return set.name.toLowerCase().includes(query) || 
-               set.code.toLowerCase().includes(query);
-      }
-      return true;
-    });
-
-    // Filter by status
-    if (filterBy !== 'all') {
-      const now = new Date();
-      filtered = filtered.filter((set) => {
-        if (!set.released_at) return filterBy === 'upcoming';
-        const releaseDate = new Date(set.released_at);
-        const isUpcoming = releaseDate > now;
-        return filterBy === 'upcoming' ? isUpcoming : !isUpcoming;
-      });
     }
+  };
 
-    // Group by year
-    const grouped: Record<string, MTGSet[]> = {};
+  // Only process sets when actually needed - not during typing
+  const getFilteredAndSortedSets = () => {
+    if (searchMode === 'cards') return [];
     
-    filtered.forEach((set) => {
-      const year = set.released_at ? new Date(set.released_at).getFullYear().toString() : 'TBA';
-      if (!grouped[year]) {
-        grouped[year] = [];
-      }
-      grouped[year].push(set);
-    });
-
-    // Sort sets within each year
-    Object.keys(grouped).forEach((year) => {
-      grouped[year].sort((a, b) => {
-        if (sortBy === 'name') {
-          return a.name.localeCompare(b.name);
-        } else {
-          // Sort by date (newest first within year)
-          const dateA = a.released_at ? new Date(a.released_at) : new Date('2099-01-01');
-          const dateB = b.released_at ? new Date(b.released_at) : new Date('2099-01-01');
-          return dateB.getTime() - dateA.getTime();
+    let sets = allSets;
+    
+    // Apply search filter only if there's a search query
+    if (debouncedCardQuery) {
+      const query = debouncedCardQuery.toLowerCase();
+      sets = sets.filter(set => 
+      set.name.toLowerCase().includes(query) ||
+      set.code.toLowerCase().includes(query) ||
+      (set.block && set.block.toLowerCase().includes(query))
+    );
+    }
+    
+         // Apply filter
+     if (filterBy !== 'all') {
+       const now = new Date();
+       sets = sets.filter(set => {
+         if (!set.released_at) return filterBy === 'upcoming';
+         const releaseDate = new Date(set.released_at);
+         if (filterBy === 'upcoming') {
+           return releaseDate > now;
+         } else {
+           return releaseDate <= now;
+         }
+       });
+     }
+     
+     // Apply sort
+     return sets.sort((a, b) => {
+      if (sortBy === 'a-z') {
+         return a.name.localeCompare(b.name);
+      } else if (sortBy === 'z-a') {
+        return b.name.localeCompare(a.name);
+      } else if (sortBy === 'oldest') {
+        if (!a.released_at || !b.released_at) {
+          if (!a.released_at && !b.released_at) return 0;
+          return !a.released_at ? 1 : -1;
         }
-      });
-    });
+        return new Date(a.released_at).getTime() - new Date(b.released_at).getTime();
+      } else { // newest
+         if (!a.released_at || !b.released_at) {
+           if (!a.released_at && !b.released_at) return 0;
+           return !a.released_at ? 1 : -1;
+         }
+         return new Date(b.released_at).getTime() - new Date(a.released_at).getTime();
+       }
+     });
+  };
 
-    return grouped;
-  }, [allSets, searchQuery, sortBy, filterBy, searchMode]);
+  // Only calculate when actually displaying sets (not during typing)
+  const filteredAndSortedSets = useMemo(() => {
+    if (searchMode === 'cards') return [];
+    return getFilteredAndSortedSets();
+  }, [searchMode, debouncedCardQuery, filterBy, sortBy, allSets]);
 
-  // Get sorted years (newest first)
+  // Group sets by year for display - memoized
+   const groupedSets = useMemo(() => {
+    if (searchMode === 'cards') return {};
+    
+     const groups: { [year: string]: MTGSet[] } = {};
+     filteredAndSortedSets.forEach(set => {
+       const year = set.released_at ? new Date(set.released_at).getFullYear().toString() : 'TBA';
+       if (!groups[year]) {
+         groups[year] = [];
+       }
+       groups[year].push(set);
+     });
+     return groups;
+  }, [filteredAndSortedSets, searchMode]);
+
   const sortedYears = useMemo(() => {
-    const years = Object.keys(setsByYear).filter(year => year !== 'TBA');
-    years.sort((a, b) => parseInt(b) - parseInt(a));
-    
-    // Add TBA at the beginning if it exists
-    if (setsByYear['TBA']) {
-      years.unshift('TBA');
-    }
-    
-    return years;
-  }, [setsByYear]);
+    if (searchMode === 'cards') return [];
+    return Object.keys(groupedSets).sort((a, b) => {
+      if (sortBy === 'a-z') return a.localeCompare(b);
+      if (sortBy === 'z-a') return b.localeCompare(a);
+      if (sortBy === 'oldest') return parseInt(a) - parseInt(b);
+      return parseInt(b) - parseInt(a); // newest
+    });
+  }, [groupedSets, sortBy, searchMode]);
 
   const formatReleaseDate = (dateString?: string) => {
     if (!dateString) return 'TBA';
@@ -238,75 +290,51 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
   };
 
   return (
-    <div className="text-white min-h-screen">
-      {/* Centered Container Layout */}
-      <div className="max-w-6xl mx-auto px-8 py-8">
+    /* Centered Container Layout */
+    <div className="max-w-6xl mx-auto px-8 pb-8 text-white">
         
         {/* Search Bar */}
         <div className="mb-8">
-          <div className="relative max-w-md mx-auto">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <div className="relative max-w-xl mx-auto">
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search for a Magic card or set"
-              className="bg-gray-800 border-gray-600 text-white pl-12 pr-12 py-3 rounded-full"
+              className="bg-black border-gray-600 text-white pl-4 pr-12 py-3 rounded-md"
+              onKeyDown={handleKeyDown}
             />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-            <button className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white">
-              <Settings className="w-4 h-4" />
+            <button className="absolute right-20 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white">
+              <Shuffle className="w-4 h-4" />
             </button>
+            <button className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white">
+              <Sliders className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={searchQuery ? () => {
+                setSearchQuery('');
+                setDebouncedCardQuery('');
+                setSearchMode('sets');
+              } : undefined}
+              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+            >
+              {searchQuery ? <X className="w-4 h-4" /> : <Search className="w-4 h-4" />}
+            </button>
+            
           </div>
         </div>
 
-        {/* Search Mode Indicator */}
-        {searchQuery && (
+
+
+        {/* Search Results Indicator */}
+        {debouncedCardQuery && (
           <div className="text-center mb-6">
             <span className="text-gray-400 text-sm">
-              Showing {searchMode === 'cards' ? 'cards' : 'sets'} for "{searchQuery}"
+              {searchMode === 'sets' ? (
+                `Found ${filteredAndSortedSets.length} set${filteredAndSortedSets.length !== 1 ? 's' : ''} for "${debouncedCardQuery}"`
+              ) : (
+                `Showing cards for "${debouncedCardQuery}"`
+              )}
             </span>
-          </div>
-        )}
-
-        {/* Controls - only show for sets mode */}
-        {searchMode === 'sets' && (
-          <div className="flex items-center justify-end mb-8 space-x-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {/* Calendar view toggle */}}
-              className="bg-gray-800 border-gray-600 text-gray-300 hover:text-white"
-            >
-              <Calendar className="w-4 h-4 mr-2" />
-              Calendar
-            </Button>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setFilterBy(filterBy === 'all' ? 'upcoming' : filterBy === 'upcoming' ? 'released' : 'all')}
-              className="bg-gray-800 border-gray-600 text-gray-300 hover:text-white"
-            >
-              <Filter className="w-4 h-4 mr-2" />
-              Filter {filterBy !== 'all' && `(${filterBy})`}
-            </Button>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSortBy(sortBy === 'date' ? 'name' : 'date')}
-              className="bg-gray-800 border-gray-600 text-gray-300 hover:text-white"
-            >
-              <ArrowUpDown className="w-4 h-4 mr-2" />
-              Sort {sortBy === 'date' ? 'Date' : 'Name'}
-            </Button>
           </div>
         )}
 
@@ -322,19 +350,193 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
           </Suspense>
         )}
 
+        {/* Loading State - show when still loading and no data yet */}
+        {searchMode === 'sets' && isBackgroundLoading && sortedYears.length === 0 && (
+          <div className="text-center py-20">
+            <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-gray-400 text-lg mb-2">Loading Magic sets...</p>
+            <p className="text-gray-500 text-sm">This may take a moment on first visit</p>
+          </div>
+        )}
+
         {/* Set Results - show when not searching cards */}
         {searchMode === 'sets' && (
           <div className="space-y-12">
-            {sortedYears.map((year) => (
+            {/* Controls at top */}
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-3xl font-bold text-white">
+                {sortBy === 'a-z' ? 'A to Z' : 
+                 sortBy === 'z-a' ? 'Z to A' : 
+                 sortedYears[0]}
+              </h2>
+              <div className="flex items-center space-x-4">
+                <Link href="/calendar">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-gray-300 hover:text-white border border-transparent hover:border-gray-600 hover:bg-transparent transition-colors"
+                  >
+                    Calendar
+                    <Calendar className="w-4 h-4 ml-1" />
+                  </Button>
+                </Link>
+                
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setFilterBy(filterBy === 'all' ? 'upcoming' : filterBy === 'upcoming' ? 'released' : 'all')}
+                  className="text-gray-300 hover:text-white border border-transparent hover:border-gray-600 hover:bg-transparent transition-colors"
+                >
+                  Filter {filterBy !== 'all' && `(${filterBy})`}
+                  <Filter className="w-4 h-4 ml-1" />
+                </Button>
+                
+                <div className="relative">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowSortDropdown(!showSortDropdown)}
+                    className="text-gray-300 hover:text-white border border-transparent hover:border-gray-600 hover:bg-transparent transition-colors"
+                  >
+                    Sort
+                    <ChevronDown className="w-4 h-4 ml-1" />
+                  </Button>
+                  
+                  {showSortDropdown && (
+                    <div className="absolute top-full right-0 mt-2 bg-black border border-gray-600 rounded-lg shadow-xl z-50 min-w-32">
+                                             <button
+                         onClick={() => {
+                           setSortBy('newest');
+                           setShowSortDropdown(false);
+                         }}
+                         className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors rounded-t-lg ${
+                           sortBy === 'newest' ? 'bg-gray-700' : ''
+                         }`}
+                       >
+                         New to Old
+                       </button>
+                       <button
+                         onClick={() => {
+                           setSortBy('oldest');
+                           setShowSortDropdown(false);
+                         }}
+                         className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                           sortBy === 'oldest' ? 'bg-gray-700' : ''
+                         }`}
+                       >
+                         Old to New
+                       </button>
+                      <button
+                        onClick={() => {
+                          setSortBy('a-z');
+                          setShowSortDropdown(false);
+                        }}
+                                                 className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                           sortBy === 'a-z' ? 'bg-gray-700' : ''
+                         }`}
+                      >
+                        A to Z
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSortBy('z-a');
+                          setShowSortDropdown(false);
+                        }}
+                                                 className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors rounded-b-lg ${
+                          sortBy === 'z-a' ? 'bg-gray-700' : ''
+                        }`}
+                      >
+                        Z to A
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <hr className="border-gray-600 mb-6" />
+
+            {/* Alphabetical Layout */}
+            {(sortBy === 'a-z' || sortBy === 'z-a') && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {filteredAndSortedSets.map((set) => {
+                  const upcoming = isUpcoming(set.released_at);
+                  const daysLeft = getDaysLeft(set.released_at);
+                  
+                  return (
+                    <Link 
+                      key={set.id} 
+                      href={`/cards/${set.code.toLowerCase()}`}
+                    >
+                      <Card className="bg-black border-black cursor-pointer hover:border-gray-600 transition-colors">
+                        <CardContent className="p-8 text-center space-y-4">
+                          {/* Upcoming Badge */}
+                          {upcoming && (
+                            <div className="inline-block">
+                              <span className="bg-white text-black text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wide">
+                                Upcoming
+                              </span>
+                            </div>
+                          )}
+                          
+                          {/* Set Icon */}
+                          <div className="flex justify-center">
+                            <div className="w-20 h-20 bg-black rounded-full flex items-center justify-center">
+                              {set.icon_svg_uri ? (
+                                <img 
+                                  src={set.icon_svg_uri} 
+                                  alt={set.name}
+                                  className="w-16 h-16 invert"
+                                />
+                              ) : (
+                                <div className="w-16 h-16 bg-gray-600 rounded-lg flex items-center justify-center">
+                                  <span className="text-white font-bold text-xl">
+                                    {set.code.substring(0, 2).toUpperCase()}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Set Name */}
+                          <h3 className="text-white font-semibold text-lg">
+                            {set.name}
+                          </h3>
+                          
+                          {/* Release Date */}
+                          <p className="text-gray-400 text-sm">
+                            Releases: {formatReleaseDate(set.released_at)}
+                          </p>
+                          
+                          {/* Days Left (for upcoming sets) */}
+                          {daysLeft && daysLeft > 0 && (
+                            <p className="text-white text-xs font-medium">
+                              ({daysLeft} days left)
+                            </p>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Chronological Layout by Year */}
+            {(sortBy === 'newest' || sortBy === 'oldest') && sortedYears.map((year, yearIndex) => (
               <div key={year} className="space-y-6">
-                {/* Year Header */}
-                <h2 className="text-3xl font-bold text-white">
+                {/* Year Header (only show for subsequent years) */}
+                {yearIndex > 0 && (
+                  <div>
+                    <h2 className="text-3xl font-bold text-white mb-4">
                   {year}
                 </h2>
+                    <hr className="border-gray-600 mb-6" />
+                  </div>
+                )}
                 
                 {/* Sets Grid for this year */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                  {setsByYear[year]?.map((set) => {
+                  {groupedSets[year]?.map((set) => {
                     const upcoming = isUpcoming(set.released_at);
                     const daysLeft = getDaysLeft(set.released_at);
                     
@@ -348,7 +550,7 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
                             {/* Upcoming Badge */}
                             {upcoming && (
                               <div className="inline-block">
-                                <span className="bg-gray-700 text-gray-300 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wide">
+                                <span className="bg-white text-black text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wide">
                                   Upcoming
                                 </span>
                               </div>
@@ -385,7 +587,7 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
                             
                             {/* Days Left (for upcoming sets) */}
                             {daysLeft && daysLeft > 0 && (
-                              <p className="text-blue-400 text-xs font-medium">
+                              <p className="text-white text-xs font-medium">
                                 ({daysLeft} days left)
                               </p>
                             )}
@@ -408,7 +610,6 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
             </p>
           </div>
         )}
-      </div>
     </div>
   );
 } 

@@ -1,22 +1,10 @@
 import React from 'react';
 import { CardSearchPageClient } from '@/components/mtg/card-search-page-client';
-import { getAllSets } from '@/lib/api/scryfall';
-import type { MTGSet } from '@/lib/types/mtg';
 
-// This runs on the server and caches the sets data
-export default async function CardsPage() {
-  // Pre-fetch sets on the server - Next.js will cache this automatically
-  let initialSets: MTGSet[] = [];
-  
-  try {
-    initialSets = await getAllSets();
-  } catch (error) {
-    console.error('Failed to fetch sets on server:', error);
-    // Fallback to empty array - client can handle error state
-  }
-
-  // Pass pre-fetched data to client component
-  return <CardSearchPageClient initialSets={initialSets} />;
+// This runs on the server and renders immediately for instant page load
+export default function CardsPage() {
+  // Render immediately with empty initial sets - client will handle all loading
+  return <CardSearchPageClient initialSets={[]} />;
 }
 
 // Enable ISR - revalidate every 30 minutes

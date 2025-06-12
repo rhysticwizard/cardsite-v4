@@ -103,6 +103,7 @@ export function EmailVerificationNotification() {
   );
 }
 
+// Original banner component (for backward compatibility)
 export function EmailVerificationBanner() {
   const { data: session } = useSession();
   const [isHidden, setIsHidden] = useState(false);

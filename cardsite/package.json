@@ -13,7 +13,10 @@
     "db:performance": "tsx scripts/test-db-performance.ts",
     "performance:benchmark": "tsx scripts/performance-benchmark.ts",
     "load:test-data": "tsx scripts/load-test-data.ts",
-    "cache:demo": "tsx scripts/cache-performance-demo.ts"
+    "cache:demo": "tsx scripts/cache-performance-demo.ts",
+    "cache:warm": "tsx scripts/cache-warming.ts",
+    "cache:warm:full": "tsx scripts/cache-warming.ts full",
+    "cache:warm:formats": "tsx scripts/cache-warming.ts formats"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.9.1",
@@ -25,11 +28,15 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tabs": "^1.1.12",
     "@sentry/nextjs": "^9.27.0",
+    "@stagewise-plugins/react": "^0.4.6",
+    "@stagewise/toolbar-next": "^0.4.6",
     "@supabase/supabase-js": "^2.50.0",
     "@tanstack/react-query": "^5.80.6",
+    "@tanstack/react-query-devtools": "^5.80.6",
     "@types/bcryptjs": "^2.4.6",
     "@upstash/ratelimit": "^2.0.5",
     "@upstash/redis": "^1.35.0",
+    "@vercel/kv": "^3.0.0",
     "axios": "^1.9.0",
     "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.1",

@@ -34,11 +34,12 @@ const securityHeaders = {
   'Content-Security-Policy': [
     "default-src 'self'",
     "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com https://discord.com",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://rsms.me",
+    "font-src 'self' https://fonts.gstatic.com https://rsms.me",
     "img-src 'self' data: https: blob:",
     "media-src 'self' https:",
-    "connect-src 'self' https://api.scryfall.io https://cards.scryfall.io https://discord.com https://discordapp.com wss: ws:",
+    "connect-src 'self' https://api.scryfall.com https://cards.scryfall.io https://discord.com https://discordapp.com wss: ws:" + 
+      (process.env.NODE_ENV === 'development' ? ' http://localhost:5746 http://localhost:5747 ws://localhost:5746 ws://localhost:5747' : ''),
     "frame-src 'self' https://www.google.com https://discord.com https://challenges.cloudflare.com",
     "object-src 'none'",
     "base-uri 'self'",
