@@ -75,10 +75,13 @@ export function SetDetailPage({ setCode }: SetDetailPageProps) {
 
   // Carousel scroll functions
   const updateScrollButtons = () => {
-    if (carouselRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = carouselRef.current;
-      setCanScrollLeft(scrollLeft > 0);
-      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1);
+    // Always enable buttons if there are multiple sets
+    if (relatedSets.length > 1) {
+      setCanScrollLeft(true);
+      setCanScrollRight(true);
+    } else {
+      setCanScrollLeft(false);
+      setCanScrollRight(false);
     }
   };
 
@@ -96,7 +99,11 @@ export function SetDetailPage({ setCode }: SetDetailPageProps) {
 
   // Update scroll buttons when related sets change
   React.useEffect(() => {
+    // Use a small delay to ensure DOM is fully rendered
+    const timer = setTimeout(() => {
     updateScrollButtons();
+    }, 100);
+    return () => clearTimeout(timer);
   }, [relatedSets]);
 
   // Update scroll buttons on scroll
@@ -248,7 +255,7 @@ export function SetDetailPage({ setCode }: SetDetailPageProps) {
             {cardsData.data.map((card: MTGCard) => (
               <Link key={card.id} href={`/card/${card.id}`}>
                 <Card 
-                  className="bg-black border-black cursor-pointer overflow-hidden hover:border-gray-600 transition-colors"
+                  className="bg-black border-black cursor-pointer overflow-hidden"
                 >
                   <CardContent className="p-0">
                     {(() => {

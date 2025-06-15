@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -194,9 +195,11 @@ export default function ProfilePage() {
                 <div className="text-center py-12">
                   <Trophy className="w-12 h-12 text-gray-600 mx-auto mb-4" />
                   <p className="text-gray-400 mb-4">Start building your first deck</p>
+                  <Link href="/deckbuilder">
                   <Button className="bg-purple-600 hover:bg-purple-700">
                     Create New Deck
                   </Button>
+                  </Link>
                 </div>
               </CardContent>
             </Card>

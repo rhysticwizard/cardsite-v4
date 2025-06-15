@@ -26,6 +26,9 @@ export const Sidebar = React.memo(function Sidebar() {
             <a href="/decks" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white">
               Decks
             </a>
+            <a href="/deckbuilder" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white">
+              Builder
+            </a>
             <a href="/forums" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white">
               Forums
             </a>
@@ -77,6 +80,14 @@ export const Sidebar = React.memo(function Sidebar() {
             }`}
           >
             Decks
+          </a>
+          <a 
+            href="/deckbuilder" 
+            className={`flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium ${
+              pathname === '/deckbuilder' ? 'text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Builder
           </a>
           <a 
             href="/forums" 

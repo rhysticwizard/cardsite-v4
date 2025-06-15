@@ -89,7 +89,7 @@ export const Navigation = React.memo(function Navigation() {
             <Button 
               onClick={() => signIn()}
               variant="ghost"
-              className="text-white hover:bg-gray-800"
+              className="text-gray-300 hover:text-white border border-transparent hover:border-gray-600 hover:bg-transparent transition-colors"
             >
               Sign in
             </Button>

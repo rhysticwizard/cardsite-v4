@@ -100,8 +100,8 @@ function CategoryCard({ category }: { category: typeof forumCategories[0] }) {
   const IconComponent = category.icon;
   
   return (
-    <Card className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-colors">
-      <CardHeader className="pb-4">
+    <Card className="bg-black border-gray-800 hover:border-gray-700 transition-colors">
+      <CardHeader className="pb-2">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
             <IconComponent className="w-5 h-5 text-white" />
@@ -119,21 +119,7 @@ function CategoryCard({ category }: { category: typeof forumCategories[0] }) {
             {category.description}
           </p>
           
-          {/* Statistics */}
-          <div className="flex items-center gap-4 text-xs text-gray-500">
-            <span className="flex items-center gap-1">
-              <MessageCircle className="w-3 h-3" />
-              {category.topics}
-            </span>
-            <span className="flex items-center gap-1">
-              <Users className="w-3 h-3" />
-              {category.replies}
-            </span>
-            <span className="flex items-center gap-1">
-              <Trophy className="w-3 h-3" />
-              {category.participants}
-            </span>
-          </div>
+
 
           {/* Subcategories */}
           <div className="space-y-2">

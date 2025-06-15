@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { searchCards, getAllSets } from '@/lib/api/scryfall';
+import { searchCards, getAllSets, getRandomCard } from '@/lib/api/scryfall';
 import type { MTGSet, MTGCard } from '@/lib/types/mtg';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Search, Calendar, Filter, ArrowUpDown, X, Settings, Sliders, Shuffle, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { formatReleaseDate, isUpcoming, getDaysLeft, getRarityColor } from '@/lib/utils/date-helpers';
 
 interface CardSearchPageClientProps {
@@ -28,7 +29,7 @@ const CardResults = React.memo(({ searchQuery }: { searchQuery: string }) => {
   if (cardsLoading) {
     return (
       <div className="text-center">
-        <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                    <div className="animate-spin w-6 h-6 border-2 border-white border-t-transparent rounded-full mx-auto mb-4"></div>
         <p className="text-gray-400">Searching cards...</p>
       </div>
     );
@@ -55,13 +56,6 @@ const CardResults = React.memo(({ searchQuery }: { searchQuery: string }) => {
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-white mb-2">Card Search Results</h2>
-        <p className="text-gray-400">
-          Found {cardResults.total_cards} card{cardResults.total_cards !== 1 ? 's' : ''}
-        </p>
-      </div>
-      
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
         {cardResults.data.map((card: MTGCard) => {
           const imageUrl = card.image_uris?.normal || 
@@ -69,7 +63,7 @@ const CardResults = React.memo(({ searchQuery }: { searchQuery: string }) => {
           
           return (
             <Link key={card.id} href={`/card/${card.id}`}>
-              <Card className="bg-black border-black cursor-pointer overflow-hidden hover:border-gray-600 transition-colors group">
+              <Card className="bg-black border-black cursor-pointer overflow-hidden">
                 <CardContent className="p-0">
                   {imageUrl ? (
                     <Image
@@ -77,7 +71,7 @@ const CardResults = React.memo(({ searchQuery }: { searchQuery: string }) => {
                       alt={card.name}
                       width={312}
                       height={445}
-                      className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-200"
+                      className="w-full h-auto object-cover"
                       priority={false}
                       placeholder="blur"
                       blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyEQZrWjRZeKkt7i4t5JIYU3Yq7KurY4VRYaNh7D0TnXDuTc7YRRGgCooJDZ3Kq0Qdq1TJe0zFZRBbXW0R8bRQeZMJbkdZKuN3Y8aakMdSdZZnaDjJ6aFPTgNvAwzIXE6dGKGwzFhXnMhF2CtNKqnqdGhztBmMOZdPQIIxnZvnJKnWg4Iw/6KzJXNPNPKfOYtAj4zNXhvhyaD5NJHQ/qHRUF4Rg6KxX8PF2Pd/TTgRQ7/8A8WN1Py8OHjvuGKohtSWQ7wOvHfhTdVVVSVTClKZqRCT0g+t+W9vy8t7YUlGJI5n7V0hRSnXPlO3lUGzAYsXD7LjHfMNGhGYVFo+6H4Z3WH4wLy3+/cEHLMpSuLKUfONW3LHW3WmKKgqUPl9Z6jYRQEa0VTyT7OKnLu9HDjIgU0ZKvq3KqzLbbbgVZ0OKY1IfHWNJO9qsCtYlCRaZKjZOKhTJZP5ZMRuKpfhpbYpQvTLYzZ5ZKuNPP/Z"
@@ -91,17 +85,6 @@ const CardResults = React.memo(({ searchQuery }: { searchQuery: string }) => {
                     </div>
                   )}
                 </CardContent>
-                
-                {/* Card info overlay on hover */}
-                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-80 p-2 transform translate-y-full group-hover:translate-y-0 transition-transform duration-200">
-                  <h3 className="text-white text-xs font-medium truncate">{card.name}</h3>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-400">{card.set_name}</span>
-                    <span className={`capitalize ${getRarityColor(card.rarity)}`}>
-                      {card.rarity}
-                    </span>
-                  </div>
-                </div>
               </Card>
             </Link>
           );
@@ -116,9 +99,12 @@ CardResults.displayName = 'CardResults';
 // Helper function moved to centralized utils
 
 export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'a-z' | 'z-a'>('newest');
   const [filterBy, setFilterBy] = useState<'all' | 'upcoming' | 'released'>('all');
+  const [setTypeFilter, setSetTypeFilter] = useState<string>('all');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [searchMode, setSearchMode] = useState<'sets' | 'cards'>('sets');
   
   // Debounced search query for card searches
@@ -126,6 +112,45 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
 
   // Sort dropdown state
   const [showSortDropdown, setShowSortDropdown] = useState(false);
+  
+  // Advanced search state
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
+  
+  // Multi-select dropdown states
+  const [showColorsDropdown, setShowColorsDropdown] = useState(false);
+  const [showCommanderDropdown, setShowCommanderDropdown] = useState(false);
+  const [showGameDropdown, setShowGameDropdown] = useState(false);
+  const [showRarityDropdown, setShowRarityDropdown] = useState(false);
+  const [selectedColors, setSelectedColors] = useState<string[]>([]);
+  const [selectedCommander, setSelectedCommander] = useState<string[]>([]);
+  const [selectedGame, setSelectedGame] = useState<string[]>([]);
+  const [selectedRarity, setSelectedRarity] = useState<string[]>([]);
+  const [advancedSearchForm, setAdvancedSearchForm] = useState({
+    cardType: '',
+    subtype: '',
+    set: '',
+    colors: '',
+    manaCost: '',
+    cmcMin: '',
+    cmcMax: '',
+    powerMin: '',
+    powerMax: '',
+    toughnessMin: '',
+    toughnessMax: '',
+    rarity: '',
+    rulesText: '',
+    flavorText: '',
+    artist: '',
+    format: '',
+    language: '',
+    border: '',
+    foil: false,
+    nonFoil: false,
+    reservedList: false,
+    digitalOnly: false,
+    watermark: false,
+    fullArt: false
+  });
 
   // Simple single API call to load all sets
   const { 
@@ -157,14 +182,22 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
   // Card search only triggers on Enter key press
   const [pendingCardSearch, setPendingCardSearch] = useState('');
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
-    const handleClickOutside = () => setShowSortDropdown(false);
-    if (showSortDropdown) {
+    const handleClickOutside = () => {
+      setShowSortDropdown(false);
+      setShowColorsDropdown(false);
+      setShowCommanderDropdown(false);
+      setShowGameDropdown(false);
+      setShowRarityDropdown(false);
+      setShowFilterDropdown(false);
+    };
+    
+    if (showSortDropdown || showColorsDropdown || showCommanderDropdown || showGameDropdown || showRarityDropdown || showFilterDropdown) {
       document.addEventListener('click', handleClickOutside);
       return () => document.removeEventListener('click', handleClickOutside);
     }
-  }, [showSortDropdown]);
+  }, [showSortDropdown, showColorsDropdown, showCommanderDropdown, showGameDropdown, showRarityDropdown, showFilterDropdown]);
 
   // Handle Enter key press for search
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -174,11 +207,64 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
         // Trigger search (both sets and cards)
         setDebouncedCardQuery(searchQuery);
         setSearchMode('cards');
+        setShowAdvancedSearch(false);
       } else {
         // Empty search - show all sets
         setDebouncedCardQuery('');
         setSearchMode('sets');
+        setShowAdvancedSearch(false);
       }
+    }
+  };
+
+  // Handle random card button click
+  const handleRandomCard = async () => {
+    try {
+      const randomCard = await getRandomCard();
+      // Set search mode to cards and display the random card
+      setSearchQuery(`"${randomCard.name}"`);
+      setDebouncedCardQuery(`"${randomCard.name}"`);
+      setSearchMode('cards');
+      setShowAdvancedSearch(false);
+    } catch (error) {
+      console.error('Failed to get random card:', error);
+    }
+  };
+
+  // Handle advanced search
+  const handleAdvancedSearch = () => {
+    const queryParts = [];
+    
+    // Build Scryfall search query from form data
+    if (advancedSearchForm.cardType) queryParts.push(`type:${advancedSearchForm.cardType}`);
+    if (advancedSearchForm.subtype) queryParts.push(`type:${advancedSearchForm.subtype}`);
+    if (advancedSearchForm.colors) queryParts.push(`color:${advancedSearchForm.colors}`);
+    if (advancedSearchForm.manaCost) queryParts.push(`mana:${advancedSearchForm.manaCost}`);
+    if (advancedSearchForm.cmcMin) queryParts.push(`cmc>=${advancedSearchForm.cmcMin}`);
+    if (advancedSearchForm.cmcMax) queryParts.push(`cmc<=${advancedSearchForm.cmcMax}`);
+    if (advancedSearchForm.powerMin) queryParts.push(`power>=${advancedSearchForm.powerMin}`);
+    if (advancedSearchForm.powerMax) queryParts.push(`power<=${advancedSearchForm.powerMax}`);
+    if (advancedSearchForm.toughnessMin) queryParts.push(`toughness>=${advancedSearchForm.toughnessMin}`);
+    if (advancedSearchForm.toughnessMax) queryParts.push(`toughness<=${advancedSearchForm.toughnessMax}`);
+    if (advancedSearchForm.rarity) queryParts.push(`rarity:${advancedSearchForm.rarity}`);
+    if (advancedSearchForm.rulesText) queryParts.push(`oracle:"${advancedSearchForm.rulesText}"`);
+    if (advancedSearchForm.flavorText) queryParts.push(`flavor:"${advancedSearchForm.flavorText}"`);
+    if (advancedSearchForm.artist) queryParts.push(`artist:"${advancedSearchForm.artist}"`);
+    if (advancedSearchForm.set) queryParts.push(`set:${advancedSearchForm.set}`);
+    if (advancedSearchForm.format) queryParts.push(`legal:${advancedSearchForm.format}`);
+    if (advancedSearchForm.border) queryParts.push(`border:${advancedSearchForm.border}`);
+    if (advancedSearchForm.foil) queryParts.push('is:foil');
+    if (advancedSearchForm.reservedList) queryParts.push('is:reserved');
+    if (advancedSearchForm.digitalOnly) queryParts.push('is:digital');
+    if (advancedSearchForm.fullArt) queryParts.push('is:fullart');
+    
+    const searchQuery = queryParts.join(' ');
+    
+    if (searchQuery) {
+      setSearchQuery(searchQuery);
+      setDebouncedCardQuery(searchQuery);
+      setSearchMode('cards');
+      setShowAdvancedSearch(false);
     }
   };
 
@@ -212,6 +298,14 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
        });
      }
      
+     // Apply set type filter
+     if (setTypeFilter !== 'all') {
+       sets = sets.filter(set => {
+         const setType = set.set_type?.toLowerCase() || '';
+         return setType === setTypeFilter.toLowerCase();
+       });
+     }
+     
      // Apply sort
      return sets.sort((a, b) => {
       if (sortBy === 'a-z') {
@@ -238,7 +332,7 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
   const filteredAndSortedSets = useMemo(() => {
     if (searchMode === 'cards') return [];
     return getFilteredAndSortedSets();
-  }, [searchMode, debouncedCardQuery, filterBy, sortBy, allSets]);
+  }, [searchMode, debouncedCardQuery, filterBy, sortBy, setTypeFilter, allSets]);
 
   // Group sets by year for display - memoized
    const groupedSets = useMemo(() => {
@@ -290,7 +384,6 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
   };
 
   return (
-    /* Centered Container Layout */
     <div className="max-w-6xl mx-auto px-8 pb-8 text-white">
         
         {/* Search Bar */}
@@ -300,13 +393,19 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search for a Magic card or set"
-              className="bg-black border-gray-600 text-white pl-4 pr-12 py-3 rounded-md"
+              className="bg-black border-gray-600 text-white pl-4 pr-12 py-3 rounded-md focus:ring-0 focus:ring-offset-0 focus:border-gray-600 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-gray-600"
               onKeyDown={handleKeyDown}
             />
-            <button className="absolute right-20 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white">
+            <button 
+              onClick={handleRandomCard}
+              className="absolute right-20 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+            >
               <Shuffle className="w-4 h-4" />
             </button>
-            <button className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white">
+            <button 
+              onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
+              className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+            >
               <Sliders className="w-4 h-4" />
             </button>
             <button 
@@ -321,135 +420,943 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
             </button>
             
           </div>
-        </div>
+          
+          {/* Advanced Search Options */}
+          <div className={`transition-all duration-300 ease-in-out overflow-hidden ${
+            showAdvancedSearch ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
+          }`}>
+            <h3 className="text-white font-semibold mb-4 max-w-6xl mx-auto">Advanced Search</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-w-6xl mx-auto">
+              {/* Basic Card Info */}
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Card Name</label>
+                <input 
+                  type="text" 
+                  placeholder="Exact or partial name"
+                  className="w-full bg-black border border-gray-600 text-white rounded px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Type Line</label>
+                <input 
+                  type="text" 
+                  placeholder="Enter a type or choose from the list"
+                  className="w-full bg-black border border-gray-600 text-white rounded px-3 py-2"
+                />
+                <div className="mt-1">
+                  <label className="flex items-center text-gray-300 text-xs">
+                    <input type="checkbox" className="mr-1 bg-black border-gray-600" />
+                    Allow partial type matches
+                  </label>
+                </div>
+              </div>
 
-
-
-        {/* Search Results Indicator */}
-        {debouncedCardQuery && (
-          <div className="text-center mb-6">
-            <span className="text-gray-400 text-sm">
-              {searchMode === 'sets' ? (
-                `Found ${filteredAndSortedSets.length} set${filteredAndSortedSets.length !== 1 ? 's' : ''} for "${debouncedCardQuery}"`
-              ) : (
-                `Showing cards for "${debouncedCardQuery}"`
-              )}
-            </span>
-          </div>
-        )}
-
-        {/* Card Search Results */}
-        {searchMode === 'cards' && debouncedCardQuery && (
-          <Suspense fallback={
-            <div className="text-center">
-              <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-              <p className="text-gray-400">Loading cards...</p>
-            </div>
-          }>
-            <CardResults searchQuery={debouncedCardQuery} />
-          </Suspense>
-        )}
-
-        {/* Loading State - show when still loading and no data yet */}
-        {searchMode === 'sets' && isBackgroundLoading && sortedYears.length === 0 && (
-          <div className="text-center py-20">
-            <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-            <p className="text-gray-400 text-lg mb-2">Loading Magic sets...</p>
-            <p className="text-gray-500 text-sm">This may take a moment on first visit</p>
-          </div>
-        )}
-
-        {/* Set Results - show when not searching cards */}
-        {searchMode === 'sets' && (
-          <div className="space-y-12">
-            {/* Controls at top */}
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-3xl font-bold text-white">
-                {sortBy === 'a-z' ? 'A to Z' : 
-                 sortBy === 'z-a' ? 'Z to A' : 
-                 sortedYears[0]}
-              </h2>
-              <div className="flex items-center space-x-4">
-                <Link href="/calendar">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-gray-300 hover:text-white border border-transparent hover:border-gray-600 hover:bg-transparent transition-colors"
+              
+              {/* Colors */}
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Colors</label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowColorsDropdown(!showColorsDropdown)}
+                    className="w-full bg-black border border-gray-600 text-white rounded px-3 py-2 text-left flex items-center justify-between"
                   >
-                    Calendar
-                    <Calendar className="w-4 h-4 ml-1" />
-                  </Button>
-                </Link>
-                
+                    <span className="text-gray-400">
+                      {selectedColors.length === 0 ? 'Select colors...' : `${selectedColors.length} Selected`}
+                    </span>
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                  
+                  {showColorsDropdown && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-black border border-gray-600 rounded-lg shadow-xl z-50 p-3">
+                      <div className="space-y-2">
+                        {['White', 'Blue', 'Black', 'Red', 'Green', 'Colorless'].map((color) => (
+                          <label key={color} className="flex items-center text-gray-300 text-sm cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              className="mr-2 bg-black border-gray-600"
+                              checked={selectedColors.includes(color)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedColors([...selectedColors, color]);
+                                } else {
+                                  setSelectedColors(selectedColors.filter(c => c !== color));
+                                }
+                              }}
+                            />
+                            {color}
+                          </label>
+                        ))}
+                        <hr className="border-gray-600 my-2" />
+                        <label className="flex items-center text-gray-300 text-xs cursor-pointer">
+                          <input type="checkbox" className="mr-1 bg-black border-gray-600" />
+                          Exactly these colors
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Commander</label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowCommanderDropdown(!showCommanderDropdown)}
+                    className="w-full bg-black border border-gray-600 text-white rounded px-3 py-2 text-left flex items-center justify-between"
+                  >
+                    <span className="text-gray-400">
+                      {selectedCommander.length === 0 ? 'Select commander colors...' : `${selectedCommander.length} Selected`}
+                    </span>
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                  
+                  {showCommanderDropdown && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-black border border-gray-600 rounded-lg shadow-xl z-50 p-3">
+                      <div className="space-y-2">
+                        {['White', 'Blue', 'Black', 'Red', 'Green', 'Colorless'].map((color) => (
+                          <label key={color} className="flex items-center text-gray-300 text-sm cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              className="mr-2 bg-black border-gray-600"
+                              checked={selectedCommander.includes(color)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedCommander([...selectedCommander, color]);
+                                } else {
+                                  setSelectedCommander(selectedCommander.filter(c => c !== color));
+                                }
+                              }}
+                            />
+                            {color}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Mana Cost</label>
+                <input 
+                  type="text" 
+                  placeholder="Any mana symbols, e.g. '{W}{U}'"
+                  className="w-full bg-black border border-gray-600 text-white rounded px-3 py-2"
+                />
+                <div className="mt-1">
+                  <label className="flex items-center text-gray-300 text-xs">
+                    <input type="checkbox" className="mr-1 bg-black border-gray-600" />
+                    Add symbol
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Stats</label>
+                <div className="flex space-x-1">
+                  <select className="w-1/3 bg-black border border-gray-600 text-white rounded px-2 py-2 text-sm">
+                    <option value="mv">Mana Value</option>
+                    <option value="pow">Power</option>
+                    <option value="tou">Toughness</option>
+                    <option value="loy">Loyalty</option>
+                  </select>
+                  <select className="w-1/4 bg-black border border-gray-600 text-white rounded px-1 py-2 text-sm">
+                    <option value="=">=</option>
+                    <option value=">">&gt;</option>
+                    <option value="<">&lt;</option>
+                    <option value=">=">&ge;</option>
+                    <option value="<=">&le;</option>
+                  </select>
+                  <input 
+                    type="text" 
+                    placeholder="Any value, e.g. '2'"
+                    className="w-5/12 bg-black border border-gray-600 text-white rounded px-3 py-2"
+                  />
+                </div>
+              </div>
+              
+              {/* Game Section */}
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Game</label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowGameDropdown(!showGameDropdown)}
+                    className="w-full bg-black border border-gray-600 text-white rounded px-3 py-2 text-left flex items-center justify-between"
+                  >
+                    <span className="text-gray-400">
+                      {selectedGame.length === 0 ? 'Select game types...' : `${selectedGame.length} Selected`}
+                    </span>
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                  
+                  {showGameDropdown && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-black border border-gray-600 rounded-lg shadow-xl z-50 p-3">
+                      <div className="space-y-2">
+                        {['Paper', 'Arena', 'Magic Online'].map((game) => (
+                          <label key={game} className="flex items-center text-gray-300 text-sm cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              className="mr-2 bg-black border-gray-600"
+                              checked={selectedGame.includes(game)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedGame([...selectedGame, game]);
+                                } else {
+                                  setSelectedGame(selectedGame.filter(g => g !== game));
+                                }
+                              }}
+                            />
+                            {game}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Sets */}
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Sets</label>
+                <input 
+                  type="text" 
+                  placeholder="Enter a set name or choose from the list"
+                  className="w-full bg-black border border-gray-600 text-white rounded px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Block</label>
+                <input 
+                  type="text" 
+                  placeholder="Enter a block name or choose from the list"
+                  className="w-full bg-black border border-gray-600 text-white rounded px-3 py-2"
+                />
+              </div>
+              
+              {/* Rarity */}
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Rarity</label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowRarityDropdown(!showRarityDropdown)}
+                    className="w-full bg-black border border-gray-600 text-white rounded px-3 py-2 text-left flex items-center justify-between"
+                  >
+                    <span className="text-gray-400">
+                      {selectedRarity.length === 0 ? 'Select rarities...' : `${selectedRarity.length} Selected`}
+                    </span>
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                  
+                  {showRarityDropdown && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-black border border-gray-600 rounded-lg shadow-xl z-50 p-3">
+                      <div className="space-y-2">
+                        {['Common', 'Uncommon', 'Rare', 'Mythic Rare'].map((rarity) => (
+                          <label key={rarity} className="flex items-center text-gray-300 text-sm cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              className="mr-2 bg-black border-gray-600"
+                              checked={selectedRarity.includes(rarity)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedRarity([...selectedRarity, rarity]);
+                                } else {
+                                  setSelectedRarity(selectedRarity.filter(r => r !== rarity));
+                                }
+                              }}
+                            />
+                            {rarity}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Criteria */}
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Criteria</label>
+                <input 
+                  type="text" 
+                  placeholder="Enter a criterion or choose from the list"
+                  className="w-full bg-black border border-gray-600 text-white rounded px-3 py-2"
+                />
+                <div className="mt-1">
+                  <label className="flex items-center text-gray-300 text-xs">
+                    <input type="checkbox" className="mr-1 bg-black border-gray-600" />
+                    Allow partial criteria matches
+                  </label>
+                </div>
+              </div>
+              
+              {/* Text Search */}
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Text</label>
+                <input 
+                  type="text" 
+                  placeholder="Any text, e.g. 'draw a card'"
+                  className="w-full bg-black border border-gray-600 text-white rounded px-3 py-2"
+                />
+                <div className="mt-1">
+                  <label className="flex items-center text-gray-300 text-xs">
+                    <input type="checkbox" className="mr-1 bg-black border-gray-600" />
+                    Add symbol
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Oracle Text</label>
+                <input 
+                  type="text" 
+                  placeholder="Rules text to search"
+                  className="w-full bg-black border border-gray-600 text-white rounded px-3 py-2"
+                />
+              </div>
+
+              
+              {/* Format */}
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Format</label>
+                <div className="flex space-x-1">
+                  <select className="w-1/2 bg-black border border-gray-600 text-white rounded px-3 py-2">
+                    <option value="">Legal</option>
+                    <option value="banned">Banned</option>
+                    <option value="restricted">Restricted</option>
+                    <option value="not_legal">Not Legal</option>
+                  </select>
+                  <select className="w-1/2 bg-black border border-gray-600 text-white rounded px-3 py-2">
+                    <option value="">Choose format</option>
+                    <option value="standard">Standard</option>
+                    <option value="pioneer">Pioneer</option>
+                    <option value="modern">Modern</option>
+                    <option value="legacy">Legacy</option>
+                    <option value="vintage">Vintage</option>
+                    <option value="commander">Commander</option>
+                    <option value="pauper">Pauper</option>
+                    <option value="historic">Historic</option>
+                    <option value="alchemy">Alchemy</option>
+                    <option value="brawl">Brawl</option>
+                    <option value="penny">Penny Dreadful</option>
+                  </select>
+                </div>
+              </div>
+              
+              {/* Language */}
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Language</label>
+                <select className="w-full bg-black border border-gray-600 text-white rounded px-3 py-2">
+                  <option value="">Default</option>
+                  <option value="en">English</option>
+                  <option value="es">Spanish</option>
+                  <option value="fr">French</option>
+                  <option value="de">German</option>
+                  <option value="it">Italian</option>
+                  <option value="pt">Portuguese</option>
+                  <option value="ja">Japanese</option>
+                  <option value="ko">Korean</option>
+                  <option value="ru">Russian</option>
+                  <option value="zhs">Chinese (Simplified)</option>
+                  <option value="zht">Chinese (Traditional)</option>
+                </select>
+              </div>
+              
+              {/* Preferences */}
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Preferences</label>
+                <div className="space-y-2">
+                  <div className="flex space-x-1">
+                    <select className="w-1/2 bg-black border border-gray-600 text-white rounded px-3 py-2">
+                      <option value="">Display as Images</option>
+                      <option value="text">Display as Text</option>
+                      <option value="checklist">Display as Checklist</option>
+                    </select>
+                    <select className="w-1/2 bg-black border border-gray-600 text-white rounded px-3 py-2">
+                      <option value="">Sort by Name</option>
+                      <option value="set">Sort by Set</option>
+                      <option value="rarity">Sort by Rarity</option>
+                      <option value="cmc">Sort by CMC</option>
+                      <option value="color">Sort by Color</option>
+                      <option value="price">Sort by Price</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="flex items-center text-gray-300 text-xs">
+                      <input type="checkbox" className="mr-1 bg-black border-gray-600" />
+                      Show all card prints
+                    </label>
+                    <label className="flex items-center text-gray-300 text-xs">
+                      <input type="checkbox" className="mr-1 bg-black border-gray-600" />
+                      Include extra cards (tokens, planes, schemes, etc.)
+                    </label>
+                  </div>
+                </div>
+              </div>
+              
+              
+              {/* Prices */}
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Prices</label>
+                <div className="flex space-x-1">
+                  <select className="w-1/3 bg-black border border-gray-600 text-white rounded px-2 py-2 text-sm">
+                    <option value="usd">USD</option>
+                    <option value="eur">EUR</option>
+                    <option value="tix">TIX</option>
+                  </select>
+                  <select className="w-1/4 bg-black border border-gray-600 text-white rounded px-1 py-2 text-sm">
+                    <option value="less">less than</option>
+                    <option value="greater">greater than</option>
+                    <option value="equal">equal to</option>
+                  </select>
+                  <input 
+                    type="text" 
+                    placeholder="Any value, e.g. '15.00'"
+                    className="w-5/12 bg-black border border-gray-600 text-white rounded px-3 py-2"
+                  />
+                </div>
+              </div>
+              
+              {/* Artist */}
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Artist</label>
+                <input 
+                  type="text" 
+                  placeholder="Any artist name, e.g. 'Magali'"
+                  className="w-full bg-black border border-gray-600 text-white rounded px-3 py-2"
+                />
+              </div>
+              
+              {/* Flavor Text */}
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Flavor Text</label>
+                <input 
+                  type="text" 
+                  placeholder="Any flavor text, e.g. 'Kaldheim'"
+                  className="w-full bg-black border border-gray-600 text-white rounded px-3 py-2"
+                />
+              </div>
+              
+              {/* Lore Finder */}
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Lore Finder™</label>
+                <input 
+                  type="text" 
+                  placeholder="Any text, especially names, e.g. 'Jhoira'"
+                  className="w-full bg-black border border-gray-600 text-white rounded px-3 py-2"
+                />
+              </div>
+              
+              {/* Special Properties */}
+              <div className="xl:col-span-4">
+                <label className="block text-gray-300 text-sm mb-2">Special Properties</label>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2">
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Foil
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Non-foil
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Reserved List
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Reprint
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    First Printing
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Promo
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Digital
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Paper
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    MTGO
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Arena
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Full Art
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Textless
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Story Spotlight
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Timeshifted
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Split Card
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Flip Card
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Transform
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Modal DFC
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Meld
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Level Up
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Saga
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Adventure
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Booster Fun
+                  </label>
+                  <label className="flex items-center text-gray-300 text-sm">
+                    <input type="checkbox" className="mr-2 bg-black border-gray-600" />
+                    Anime
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end mt-4 space-x-2 max-w-4xl mx-auto">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setShowAdvancedSearch(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                Cancel
+              </Button>
+                              <Button 
+                variant="ghost"
+                size="sm"
+                onClick={handleAdvancedSearch}
+                className="text-gray-300 hover:text-white border border-transparent hover:border-gray-600 hover:bg-transparent transition-colors"
+              >
+                Search
+              </Button>
+             </div>
+         </div>
+      </div>
+
+
+
+      {/* Search Results Indicator */}
+
+
+      {/* Card Search Results */}
+      {searchMode === 'cards' && debouncedCardQuery && (
+        <Suspense fallback={
+          <div className="text-center">
+            <div className="animate-spin w-6 h-6 border-2 border-white border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-gray-400">Loading cards...</p>
+          </div>
+        }>
+          <CardResults searchQuery={debouncedCardQuery} />
+        </Suspense>
+      )}
+
+      {/* Loading State - show when still loading and no data yet */}
+      {searchMode === 'sets' && isBackgroundLoading && sortedYears.length === 0 && (
+        <div className="text-center py-20">
+          <div className="animate-spin w-8 h-8 border-2 border-white border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-400 text-lg">Loading Magic sets...</p>
+        </div>
+      )}
+
+      {/* Set Results - show when not searching cards and not loading */}
+      {searchMode === 'sets' && !(isBackgroundLoading && sortedYears.length === 0) && (
+        <div className="space-y-12">
+          {/* Controls at top */}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-white">
+              {sortBy === 'a-z' ? 'A to Z' : 
+               sortBy === 'z-a' ? 'Z to A' : 
+               sortedYears[0]}
+            </h2>
+            <div className="flex items-center space-x-4">
+              <Link href="/calendar">
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setFilterBy(filterBy === 'all' ? 'upcoming' : filterBy === 'upcoming' ? 'released' : 'all')}
                   className="text-gray-300 hover:text-white border border-transparent hover:border-gray-600 hover:bg-transparent transition-colors"
                 >
-                  Filter {filterBy !== 'all' && `(${filterBy})`}
+                  Calendar
+                  <Calendar className="w-4 h-4 ml-1" />
+                </Button>
+              </Link>
+              
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                  className="text-gray-300 hover:text-white border border-transparent hover:border-gray-600 hover:bg-transparent transition-colors"
+                >
+                  Filter {setTypeFilter !== 'all' && '(active)'}
                   <Filter className="w-4 h-4 ml-1" />
                 </Button>
                 
-                <div className="relative">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowSortDropdown(!showSortDropdown)}
-                    className="text-gray-300 hover:text-white border border-transparent hover:border-gray-600 hover:bg-transparent transition-colors"
-                  >
-                    Sort
-                    <ChevronDown className="w-4 h-4 ml-1" />
-                  </Button>
-                  
-                  {showSortDropdown && (
-                    <div className="absolute top-full right-0 mt-2 bg-black border border-gray-600 rounded-lg shadow-xl z-50 min-w-32">
-                                             <button
-                         onClick={() => {
-                           setSortBy('newest');
-                           setShowSortDropdown(false);
-                         }}
-                         className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors rounded-t-lg ${
-                           sortBy === 'newest' ? 'bg-gray-700' : ''
-                         }`}
-                       >
-                         New to Old
-                       </button>
-                       <button
-                         onClick={() => {
-                           setSortBy('oldest');
-                           setShowSortDropdown(false);
-                         }}
-                         className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
-                           sortBy === 'oldest' ? 'bg-gray-700' : ''
-                         }`}
-                       >
-                         Old to New
-                       </button>
-                      <button
-                        onClick={() => {
-                          setSortBy('a-z');
-                          setShowSortDropdown(false);
-                        }}
-                                                 className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
-                           sortBy === 'a-z' ? 'bg-gray-700' : ''
-                         }`}
-                      >
-                        A to Z
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSortBy('z-a');
-                          setShowSortDropdown(false);
-                        }}
-                                                 className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors rounded-b-lg ${
-                          sortBy === 'z-a' ? 'bg-gray-700' : ''
-                        }`}
-                      >
-                        Z to A
-                      </button>
-                    </div>
-                  )}
+                {showFilterDropdown && (
+                  <div className="absolute top-full right-0 mt-2 bg-black border border-gray-600 rounded-lg shadow-xl z-50 min-w-48 max-h-80 overflow-y-auto">
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('all');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors rounded-t-lg ${
+                        setTypeFilter === 'all' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Any
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('alchemy');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'alchemy' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Alchemy
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('archenemy');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'archenemy' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Archenemy
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('arsenal');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'arsenal' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Arsenal
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('box');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'box' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Box
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('commander');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'commander' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Commander
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('core');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'core' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Core
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('draft_innovation');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'draft_innovation' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Draft Innovation
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('duel_deck');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'duel_deck' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Duel Deck
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('expansion');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'expansion' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Expansion
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('from_the_vault');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'from_the_vault' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      From The Vault
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('funny');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'funny' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Funny
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('masterpiece');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'masterpiece' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Masterpiece
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('masters');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'masters' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Masters
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('memorabilia');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'memorabilia' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Memorabilia
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('minigame');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'minigame' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Minigame
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('planechase');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'planechase' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Planechase
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('premium_deck');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'premium_deck' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Premium Deck
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('promo');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'promo' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Promo
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('spellbook');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'spellbook' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Spellbook
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('starter');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'starter' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Starter
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('token');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'token' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Token
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('treasure_chest');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        setTypeFilter === 'treasure_chest' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Treasure Chest
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSetTypeFilter('vanguard');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors rounded-b-lg ${
+                        setTypeFilter === 'vanguard' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Vanguard
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowSortDropdown(!showSortDropdown)}
+                  className="text-gray-300 hover:text-white border border-transparent hover:border-gray-600 hover:bg-transparent transition-colors"
+                >
+                  Sort
+                  <ArrowUpDown className="w-4 h-4 ml-1" />
+                </Button>
+                
+                {showSortDropdown && (
+                  <div className="absolute top-full right-0 mt-2 bg-black border border-gray-600 rounded-lg shadow-xl z-50 min-w-32">
+                    <button
+                      onClick={() => {
+                        setSortBy('newest');
+                        setShowSortDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors rounded-t-lg ${
+                        sortBy === 'newest' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      New to Old
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSortBy('oldest');
+                        setShowSortDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        sortBy === 'oldest' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Old to New
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSortBy('a-z');
+                        setShowSortDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                        sortBy === 'a-z' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      A to Z
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSortBy('z-a');
+                        setShowSortDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors rounded-b-lg ${
+                        sortBy === 'z-a' ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      Z to A
+                    </button>
+                  </div>
+                )}
                 </div>
               </div>
             </div>
@@ -467,7 +1374,7 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
                       key={set.id} 
                       href={`/cards/${set.code.toLowerCase()}`}
                     >
-                      <Card className="bg-black border-black cursor-pointer hover:border-gray-600 transition-colors">
+                      <Card className="bg-black border-black cursor-pointer">
                         <CardContent className="p-8 text-center space-y-4">
                           {/* Upcoming Badge */}
                           {upcoming && (
@@ -527,7 +1434,7 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
                 {/* Year Header (only show for subsequent years) */}
                 {yearIndex > 0 && (
                   <div>
-                    <h2 className="text-3xl font-bold text-white mb-4">
+                    <h2 className="text-xl font-bold text-white mb-4">
                   {year}
                 </h2>
                     <hr className="border-gray-600 mb-6" />
@@ -545,7 +1452,7 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
                         key={set.id} 
                         href={`/cards/${set.code.toLowerCase()}`}
                       >
-                        <Card className="bg-black border-black cursor-pointer hover:border-gray-600 transition-colors">
+                        <Card className="bg-black border-black cursor-pointer">
                           <CardContent className="p-8 text-center space-y-4">
                             {/* Upcoming Badge */}
                             {upcoming && (
@@ -602,14 +1509,7 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
           </div>
         )}
 
-        {/* No Results for Sets */}
-        {searchMode === 'sets' && sortedYears.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-400 text-lg">
-              No sets found matching your criteria.
-            </p>
-          </div>
-        )}
+
     </div>
   );
 } 
