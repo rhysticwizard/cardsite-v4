@@ -21,11 +21,14 @@ interface DeckColumnProps {
   cards: DeckCardData[];
   onCardRemove: (cardId: string, category: DeckCategory) => void;
   onQuantityChange: (cardId: string, category: DeckCategory, newQuantity: number) => void;
+  onCardChange?: (cardId: string, category: DeckCategory, newCard: MTGCard) => void;
+  onShowVariants?: (cardName: string, cardId: string) => void;
+  onShowPreview?: (card: MTGCard) => void;
   onColumnDelete?: (columnId: string) => void;
   activeId: string | null;
 }
 
-export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, onColumnDelete, activeId }: DeckColumnProps) {
+export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, onCardChange, onShowVariants, onShowPreview, onColumnDelete, activeId }: DeckColumnProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showColumnOptions, setShowColumnOptions] = useState(false);
   const [showStartsInPlay, setShowStartsInPlay] = useState(false);
@@ -228,7 +231,7 @@ export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, o
       <div className="relative px-4 py-4 min-h-[300px]">
         {/* Invisible drop overlay - ensures drop zone is always accessible */}
         <div 
-          className="absolute inset-0 z-50 pointer-events-none"
+          className="absolute inset-0 z-0 pointer-events-none"
           style={{ 
             pointerEvents: activeId ? 'auto' : 'none' // Only active during drag
           }}
@@ -258,6 +261,9 @@ export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, o
                   category={cardData.category}
                   onRemove={() => onCardRemove(cardData.id, cardData.category)}
                   onQuantityChange={(newQuantity) => onQuantityChange(cardData.id, cardData.category, newQuantity)}
+                  onCardChange={(newCard) => onCardChange?.(cardData.id, cardData.category, newCard)}
+                  onShowVariants={onShowVariants}
+                  onShowPreview={onShowPreview}
                   isTopCard={index === cards.length - 1}
                   activeId={activeId}
                 />

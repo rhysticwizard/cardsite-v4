@@ -174,6 +174,20 @@ export async function getCardsFromSet(setCode: string, page = 1): Promise<Scryfa
   });
 }
 
+/**
+ * Get all prints/variants of a card by name
+ */
+export async function getCardVariants(cardName: string): Promise<ScryfallSearchResponse> {
+  return searchCards({
+    q: `!"${cardName}"`,
+    unique: 'prints', // Get all printings, not just unique cards
+    order: 'released',
+    dir: 'desc',
+    include_extras: true,
+    include_variations: true,
+  });
+}
+
 // Common search queries
 export const COMMON_SEARCHES = {
   // Popular formats

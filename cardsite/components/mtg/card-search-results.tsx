@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import type { MTGCard } from '@/lib/types/mtg';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -11,17 +11,21 @@ interface CardSearchResultsProps {
   results: MTGCard[];
   isLoading: boolean;
   onCardAdd: (card: MTGCard) => void;
+  onVariantSelect?: (card: MTGCard) => void;
+  isShowingVariants?: boolean;
 }
 
 interface DraggableSearchCardProps {
   card: MTGCard;
   onCardAdd: (card: MTGCard) => void;
+  onVariantSelect?: (card: MTGCard) => void;
+  isShowingVariants?: boolean;
 }
 
-function DraggableSearchCard({ card, onCardAdd }: DraggableSearchCardProps) {
+function DraggableSearchCard({ card, onCardAdd, onVariantSelect, isShowingVariants }: DraggableSearchCardProps) {
   const [showPreview, setShowPreview] = useState(false);
-  const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
   const [previewPosition, setPreviewPosition] = useState({ x: 0, y: 0 });
+  const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -32,6 +36,7 @@ function DraggableSearchCard({ card, onCardAdd }: DraggableSearchCardProps) {
     isDragging,
   } = useDraggable({
     id: `search-${card.id}`,
+    disabled: isShowingVariants,
   });
 
   const style = transform ? {
@@ -74,12 +79,20 @@ function DraggableSearchCard({ card, onCardAdd }: DraggableSearchCardProps) {
     <div
       ref={setNodeRef}
       style={style}
-      {...listeners}
-      {...attributes}
-      className={`cursor-grab active:cursor-grabbing ${
-        isDragging ? 'opacity-0' : ''
+      {...(isShowingVariants ? {} : listeners)}
+      {...(isShowingVariants ? {} : attributes)}
+      className={`${
+        isShowingVariants 
+          ? 'cursor-pointer'
+          : `cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-0' : ''}`
       }`}
-      onClick={() => onCardAdd(card)}
+      onClick={() => {
+        if (isShowingVariants && onVariantSelect) {
+          onVariantSelect(card);
+        } else {
+          onCardAdd(card);
+        }
+      }}
     >
       <div 
         ref={cardRef}
@@ -141,16 +154,28 @@ function DraggableSearchCard({ card, onCardAdd }: DraggableSearchCardProps) {
   );
 }
 
-export function CardSearchResults({ results, isLoading, onCardAdd }: CardSearchResultsProps) {
+export function CardSearchResults({ results, isLoading, onCardAdd, onVariantSelect, isShowingVariants }: CardSearchResultsProps) {
   const [startIndex, setStartIndex] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const cardsPerPage = 5;
 
+  // Reset carousel position when results change
+  React.useEffect(() => {
+    setStartIndex(0);
+  }, [results]);
+
   const goToPrevious = () => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
     setStartIndex(prev => Math.max(0, prev - cardsPerPage));
+    setTimeout(() => setIsTransitioning(false), 300);
   };
 
   const goToNext = () => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
     setStartIndex(prev => Math.min(results.length - cardsPerPage, prev + cardsPerPage));
+    setTimeout(() => setIsTransitioning(false), 300);
   };
 
   const visibleCards = results.slice(startIndex, startIndex + cardsPerPage);
@@ -181,9 +206,9 @@ export function CardSearchResults({ results, isLoading, onCardAdd }: CardSearchR
         {/* Left arrow */}
         <button
           onClick={goToPrevious}
-          disabled={!canGoBack}
+          disabled={!canGoBack || isTransitioning}
           className={`absolute left-0 z-10 p-2 transition-all duration-200 ${
-            canGoBack 
+            canGoBack && !isTransitioning
               ? 'text-white hover:text-gray-300 cursor-pointer' 
               : 'text-gray-600 cursor-not-allowed'
           }`}
@@ -192,23 +217,36 @@ export function CardSearchResults({ results, isLoading, onCardAdd }: CardSearchR
         </button>
 
         {/* Carousel */}
-        <div className="flex gap-4 justify-center items-center">
-          {visibleCards.map((card) => (
-            <div key={card.id} className="flex-shrink-0 w-48">
+        <div className="overflow-x-hidden w-full py-1 px-1" style={{ width: `${cardsPerPage * (192 + 16) - 16 + 8}px` }}>
+          <div 
+            className="flex gap-4 transition-transform duration-300 ease-in-out"
+            style={{
+              transform: `translateX(-${startIndex * (192 + 16)}px)`, // 192px card width + 16px gap
+              width: `${results.length * (192 + 16)}px`
+            }}
+          >
+            {results.map((card) => (
+              <div 
+                key={card.id} 
+                className="flex-shrink-0 w-48"
+              >
               <DraggableSearchCard
                 card={card}
                 onCardAdd={onCardAdd}
+                  onVariantSelect={onVariantSelect}
+                  isShowingVariants={isShowingVariants}
               />
             </div>
           ))}
+          </div>
         </div>
 
         {/* Right arrow */}
         <button
           onClick={goToNext}
-          disabled={!canGoForward}
+          disabled={!canGoForward || isTransitioning}
           className={`absolute right-0 z-10 p-2 transition-all duration-200 ${
-            canGoForward 
+            canGoForward && !isTransitioning
               ? 'text-white hover:text-gray-300 cursor-pointer' 
               : 'text-gray-600 cursor-not-allowed'
           }`}

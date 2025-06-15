@@ -17,19 +17,25 @@ interface DeckCardProps {
   category: 'creatures' | 'spells' | 'artifacts' | 'enchantments' | 'lands' | 'sideboard';
   onRemove: () => void;
   onQuantityChange: (newQuantity: number) => void;
+  onCardChange?: (newCard: MTGCard) => void;
+  onShowVariants?: (cardName: string, cardId: string) => void;
+  onShowPreview?: (card: MTGCard) => void;
   isTopCard?: boolean;
   activeId: string | null;
 }
 
-export function DeckCard({ id, card, quantity, category, onRemove, onQuantityChange, isTopCard = true, activeId }: DeckCardProps) {
+export function DeckCard({ id, card, quantity, category, onRemove, onQuantityChange, onCardChange, onShowVariants, onShowPreview, isTopCard = true, activeId }: DeckCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editQuantity, setEditQuantity] = useState(quantity.toString());
   const [showPreview, setShowPreview] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  const [showOptionsDropdown, setShowOptionsDropdown] = useState(false);
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
   const [controlsTimeout, setControlsTimeout] = useState<NodeJS.Timeout | null>(null);
   const [previewPosition, setPreviewPosition] = useState({ x: 0, y: 0 });
+  const [currentFaceIndex, setCurrentFaceIndex] = useState(0);
   const cardRef = useRef<HTMLDivElement>(null);
+  const optionsRef = useRef<HTMLDivElement>(null);
 
   const {
     attributes,
@@ -42,6 +48,17 @@ export function DeckCard({ id, card, quantity, category, onRemove, onQuantityCha
   const style = transform ? {
     transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
   } : undefined;
+
+  // Check if card is double-faced
+  const isDoubleFaced = (card as any).card_faces && (card as any).card_faces.length >= 2;
+  
+  // Get current face data
+  const currentFace = isDoubleFaced ? (card as any).card_faces[currentFaceIndex] : card;
+  
+  // Get image URL for current face
+  const imageUrl = isDoubleFaced 
+    ? currentFace?.image_uris?.normal
+    : card.image_uris?.normal || (card as any).card_faces?.[0]?.image_uris?.normal;
 
   const handleQuantitySubmit = () => {
     const newQuantity = parseInt(editQuantity);
@@ -59,9 +76,6 @@ export function DeckCard({ id, card, quantity, category, onRemove, onQuantityCha
       setIsEditing(false);
     }
   };
-
-  const imageUrl = card.image_uris?.normal || 
-                  (card as any).card_faces?.[0]?.image_uris?.normal;
 
   const handleMouseEnter = () => {
     if (cardRef.current) {
@@ -100,6 +114,61 @@ export function DeckCard({ id, card, quantity, category, onRemove, onQuantityCha
     setShowControls(false);
   };
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      
+      // Check if click is outside both the options button and the dropdown
+      const isOutsideButton = optionsRef.current && !optionsRef.current.contains(target);
+      const isOutsideDropdown = !target.closest('[data-dropdown="options"]');
+      
+      if (isOutsideButton && isOutsideDropdown) {
+        setShowOptionsDropdown(false);
+      }
+    };
+
+    if (showOptionsDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showOptionsDropdown]);
+
+  const handleOptionsClick = () => {
+    setShowOptionsDropdown(!showOptionsDropdown);
+  };
+
+  const handleChangeSets = () => {
+    if (onShowVariants) {
+      onShowVariants(card.name, id);
+    }
+    setShowOptionsDropdown(false);
+    
+    // Reset hover states when showing variants to prevent stuck preview/controls
+    setShowPreview(false);
+    setShowControls(false);
+    
+    // Clear any pending timeouts
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+      setHoverTimeout(null);
+    }
+    if (controlsTimeout) {
+      clearTimeout(controlsTimeout);
+      setControlsTimeout(null);
+    }
+  };
+
+  const handleFlip = () => {
+    if (isDoubleFaced) {
+      setCurrentFaceIndex(prev => prev === 0 ? 1 : 0);
+    }
+    setShowOptionsDropdown(false);
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -131,9 +200,9 @@ export function DeckCard({ id, card, quantity, category, onRemove, onQuantityCha
             />
           ) : (
             <div className="absolute inset-0 bg-gray-800 border border-gray-600 rounded-lg flex flex-col items-center justify-center p-2 text-center">
-              <p className="text-white text-xs font-medium mb-1 line-clamp-2">{card.name}</p>
-              <p className="text-gray-400 text-xs">{card.mana_cost || ''}</p>
-              <p className="text-gray-500 text-xs">{card.type_line}</p>
+              <p className="text-white text-xs font-medium mb-1 line-clamp-2">{currentFace.name || card.name}</p>
+              <p className="text-gray-400 text-xs">{currentFace.mana_cost || card.mana_cost || ''}</p>
+              <p className="text-gray-500 text-xs">{currentFace.type_line || card.type_line}</p>
             </div>
           )}
         </div>
@@ -153,20 +222,96 @@ export function DeckCard({ id, card, quantity, category, onRemove, onQuantityCha
               {...attributes}
               className="flex items-center justify-between bg-gradient-to-b from-black via-black/80 to-transparent rounded-t-lg px-2 py-2 cursor-grab active:cursor-grabbing">
               {/* Options Button - left */}
-              <Button
-                size="sm"
-                variant="ghost"
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Add options functionality here
-                }}
-                className="w-6 h-6 p-0 hover:bg-gray-700 text-white hover:text-white"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                </svg>
-              </Button>
+              <div className="relative" ref={optionsRef}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOptionsClick();
+                  }}
+                  className="w-6 h-6 p-0 hover:bg-gray-700 text-white hover:text-white"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                  </svg>
+                </Button>
+
+                {/* Options Dropdown */}
+                {showOptionsDropdown && typeof window !== 'undefined' && createPortal(
+                  <div 
+                    data-dropdown="options"
+                    className="fixed bg-black border border-gray-600 rounded-lg shadow-xl z-[9999] min-w-40"
+                    style={{
+                      left: `${cardRef.current?.getBoundingClientRect().left || 0}px`,
+                      top: `${(cardRef.current?.getBoundingClientRect().top || 0) + 32}px`,
+                    }}
+                  >
+                    <div className="py-1">
+                      <button
+                        onClick={() => {
+                          if (onShowPreview) {
+                            onShowPreview(card);
+                          }
+                          // Clean up all hover states when opening preview modal
+                          setShowOptionsDropdown(false);
+                          setShowPreview(false);
+                          setShowControls(false);
+                          
+                          // Clear any pending timeouts
+                          if (hoverTimeout) {
+                            clearTimeout(hoverTimeout);
+                            setHoverTimeout(null);
+                          }
+                          if (controlsTimeout) {
+                            clearTimeout(controlsTimeout);
+                            setControlsTimeout(null);
+                          }
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm text-white hover:bg-gray-800 transition-colors flex items-center"
+                      >
+                        Preview
+                      </button>
+                      <button
+                        onClick={handleChangeSets}
+                        className="w-full text-left px-3 py-2 text-sm text-white hover:bg-gray-800 transition-colors flex items-center"
+                      >
+                        Change Set
+                      </button>
+                      <button
+                        onClick={() => {
+                          // TODO: Implement foil treatment functionality
+                          console.log('Change foil treatment for:', card.name);
+                          setShowOptionsDropdown(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm text-white hover:bg-gray-800 transition-colors flex items-center"
+                      >
+                        Change Treatment
+                      </button>
+                      <button
+                        onClick={() => {
+                          // Navigate to internal card page using card ID
+                          window.open(`/card/${card.id}`, '_blank');
+                          setShowOptionsDropdown(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm text-white hover:bg-gray-800 transition-colors flex items-center"
+                      >
+                        Go to Card Page
+                      </button>
+                      {isDoubleFaced && (
+                        <button
+                          onClick={handleFlip}
+                          className="w-full text-left px-3 py-2 text-sm text-white hover:bg-gray-800 transition-colors flex items-center"
+                        >
+                          Flip
+                        </button>
+                      )}
+                    </div>
+                  </div>,
+                  document.body
+                )}
+              </div>
 
               {/* Quantity Controls - center */}
               <div className="flex items-center space-x-1">
@@ -176,7 +321,7 @@ export function DeckCard({ id, card, quantity, category, onRemove, onQuantityCha
                   onMouseDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onQuantityChange(Math.max(1, quantity - 1));
+                    onQuantityChange(quantity - 1);
                   }}
                   className="w-6 h-6 p-0 hover:bg-gray-700 text-white"
                 >
@@ -234,18 +379,18 @@ export function DeckCard({ id, card, quantity, category, onRemove, onQuantityCha
             {imageUrl ? (
               <Image
                 src={imageUrl}
-                alt={card.name}
+                alt={currentFace.name || card.name}
                 fill
                 className="object-cover rounded-lg"
                 sizes="288px"
               />
             ) : (
               <div className="absolute inset-0 bg-gray-800 border border-gray-600 rounded-lg flex flex-col items-center justify-center p-4 text-center">
-                <p className="text-white text-lg font-medium mb-2 line-clamp-3">{card.name}</p>
-                <p className="text-gray-400 text-base mb-2">{card.mana_cost || ''}</p>
-                <p className="text-gray-500 text-sm">{card.type_line}</p>
-                {card.oracle_text && (
-                  <p className="text-gray-300 text-xs mt-2 line-clamp-4">{card.oracle_text}</p>
+                <p className="text-white text-lg font-medium mb-2 line-clamp-3">{currentFace.name || card.name}</p>
+                <p className="text-gray-400 text-base mb-2">{currentFace.mana_cost || card.mana_cost || ''}</p>
+                <p className="text-gray-500 text-sm">{currentFace.type_line || card.type_line}</p>
+                {(currentFace.oracle_text || card.oracle_text) && (
+                  <p className="text-gray-300 text-xs mt-2 line-clamp-4">{currentFace.oracle_text || card.oracle_text}</p>
                 )}
               </div>
             )}
@@ -253,6 +398,8 @@ export function DeckCard({ id, card, quantity, category, onRemove, onQuantityCha
         </div>,
         document.body
       )}
+
+
     </div>
   );
 } 
