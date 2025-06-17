@@ -130,3 +130,24 @@
 .scrollbar-hide::-webkit-scrollbar { 
   display: none;  /* Safari and Chrome */
 }
+
+/* Playmat grid background */
+.bg-grid-pattern {
+  background-color: #000;
+  background-image: 
+    linear-gradient(#111 1px, transparent 1px),
+    linear-gradient(90deg, #111 1px, transparent 1px);
+  background-size: 30px 30px;
+}
+
+@media (max-width: 768px) {
+  .bg-grid-pattern {
+    background-size: 20px 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .bg-grid-pattern {
+    background-size: 15px 15px;
+  }
+}

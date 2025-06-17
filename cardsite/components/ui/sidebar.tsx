@@ -26,9 +26,7 @@ export const Sidebar = React.memo(function Sidebar() {
             <a href="/decks" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white">
               Decks
             </a>
-            <a href="/deckbuilder" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white">
-              Builder
-            </a>
+
             <a href="/forums" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white">
               Forums
             </a>
@@ -46,6 +44,9 @@ export const Sidebar = React.memo(function Sidebar() {
             </a>
             <a href="/play" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white">
               Play
+            </a>
+            <a href="/playmat" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white">
+              Playmat
             </a>
           </nav>
         </div>
@@ -81,14 +82,7 @@ export const Sidebar = React.memo(function Sidebar() {
           >
             Decks
           </a>
-          <a 
-            href="/deckbuilder" 
-            className={`flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium ${
-              pathname === '/deckbuilder' ? 'text-white' : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Builder
-          </a>
+
           <a 
             href="/forums" 
             className={`flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium ${
@@ -136,6 +130,14 @@ export const Sidebar = React.memo(function Sidebar() {
             }`}
           >
             Play
+          </a>
+          <a 
+            href="/playmat" 
+            className={`flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium ${
+              pathname === '/playmat' ? 'text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Playmat
           </a>
         </nav>
       </div>

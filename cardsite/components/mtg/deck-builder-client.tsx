@@ -17,7 +17,7 @@ import { searchCards, getCardVariants, getRandomCard } from '@/lib/api/scryfall'
 import type { MTGCard } from '@/lib/types/mtg';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Download, Upload, Play, Info, Save, Loader2, X as XIcon, Shuffle, Sliders, ChevronDown } from 'lucide-react';
+import { Search, Download, Upload, Play, Info, Save, Loader2, X as XIcon, Shuffle, Sliders, ChevronDown, Grid, List } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { CardSearchResults } from './card-search-results';
@@ -80,6 +80,7 @@ export function DeckBuilderClient() {
   const [isEditingDeckName, setIsEditingDeckName] = useState(false);
   const [tempDeckName, setTempDeckName] = useState('Untitled Deck');
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
+  const [viewMode, setViewMode] = useState<'visual' | 'text'>('visual');
   
   // Advanced search dropdown states
   const [showColorsDropdown, setShowColorsDropdown] = useState(false);
@@ -421,7 +422,7 @@ export function DeckBuilderClient() {
           // For custom columns, add directly to deck
           setDeck(prev => ({
             ...prev,
-            [overId]: [...(prev[overId] as any[] || []), {
+            [overId]: [...((prev as any)[overId] || []), {
               id: `${card.id}-${overId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
               card,
               quantity: 1,
@@ -561,7 +562,7 @@ export function DeckBuilderClient() {
       });
 
       setDeck(prev => {
-        const newDeck = { ...prev };
+        const newDeck = { ...prev } as any;
         delete newDeck[columnId];
         return newDeck;
       });
@@ -833,6 +834,7 @@ export function DeckBuilderClient() {
                 onCardAdd={addCardToDeck}
               onVariantSelect={handleVariantSelect}
               isShowingVariants={!!showingVariantsFor}
+                viewMode={viewMode}
               />
             </div>
 
@@ -1407,6 +1409,32 @@ export function DeckBuilderClient() {
               </div>
               
               <div className="flex items-center space-x-3">
+                {/* View Mode Toggle */}
+                <div className="flex items-center bg-black rounded-lg p-1">
+                  <button
+                    onClick={() => setViewMode('visual')}
+                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                      viewMode === 'visual'
+                        ? 'bg-white text-black'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                    title="Visual View"
+                  >
+                    <Grid className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('text')}
+                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                      viewMode === 'text'
+                        ? 'bg-white text-black'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                    title="Text View"
+                  >
+                    <List className="w-4 h-4" />
+                  </button>
+                </div>
+                
                 <Button variant="ghost" size="sm" className="text-white hover:text-gray-300">
                   Undo
                   <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1497,6 +1525,7 @@ export function DeckBuilderClient() {
                       onShowPreview={handleCardPreview}
                         onColumnDelete={deleteColumn}
                         activeId={activeId}
+                        viewMode={viewMode}
                       />
                       {/* Plus button to add column below this one - only show if no children */}
                       {(!columnChildren[key] || columnChildren[key].length === 0) && (
@@ -1558,6 +1587,7 @@ export function DeckBuilderClient() {
                           onShowPreview={handleCardPreview}
                             onColumnDelete={deleteColumn}
                             activeId={activeId}
+                            viewMode={viewMode}
                           />
                           {/* Plus button only on the last child in the stack */}
                           {isLastChild && (

@@ -5,6 +5,7 @@ import { useDroppable } from '@dnd-kit/core';
 import type { MTGCard } from '@/lib/types/mtg';
 import { ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { DeckCard } from './deck-card';
+import { DeckCardText } from './deck-card-text';
 
 interface DeckCardData {
   id: string;
@@ -26,9 +27,10 @@ interface DeckColumnProps {
   onShowPreview?: (card: MTGCard) => void;
   onColumnDelete?: (columnId: string) => void;
   activeId: string | null;
+  viewMode?: 'visual' | 'text';
 }
 
-export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, onCardChange, onShowVariants, onShowPreview, onColumnDelete, activeId }: DeckColumnProps) {
+export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, onCardChange, onShowVariants, onShowPreview, onColumnDelete, activeId, viewMode = 'visual' }: DeckColumnProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showColumnOptions, setShowColumnOptions] = useState(false);
   const [showStartsInPlay, setShowStartsInPlay] = useState(false);
@@ -95,11 +97,17 @@ export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, o
     // Here you could add a callback to update the title in the parent component
   };
 
-  // Calculate the total height needed for all cards with 60px offsets
+  // Calculate the total height needed for cards based on view mode
   const calculateHeight = () => {
     if (cards.length === 0) return 300; // min height for empty column
-    // Header(40) + topPadding(16) + cardHeight(268) + stackingOffset + bottomPadding(14)
-    return 40 + 16 + 268 + (cards.length - 1) * 60 + 14;
+    
+    if (viewMode === 'text') {
+      // Header(40) + topPadding(16) + cardHeight(40) * cards + gap(8) * (cards-1) + bottomPadding(16)
+      return 40 + 16 + (40 * cards.length) + (8 * Math.max(0, cards.length - 1)) + 16;
+    } else {
+      // Visual mode: Header(40) + topPadding(16) + cardHeight(268) + stackingOffset + bottomPadding(14)
+      return 40 + 16 + 268 + (cards.length - 1) * 60 + 14;
+    }
   };
 
   return (
@@ -240,6 +248,24 @@ export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, o
         {cards.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-center text-gray-500">
             <p className="text-sm">Drag cards here</p>
+          </div>
+        ) : viewMode === 'text' ? (
+          <div className="space-y-2">
+            {cards.map((cardData) => (
+              <DeckCardText
+                key={cardData.id}
+                id={cardData.id}
+                card={cardData.card}
+                quantity={cardData.quantity}
+                category={cardData.category}
+                onRemove={() => onCardRemove(cardData.id, cardData.category)}
+                onQuantityChange={(newQuantity) => onQuantityChange(cardData.id, cardData.category, newQuantity)}
+                onCardChange={(newCard) => onCardChange?.(cardData.id, cardData.category, newCard)}
+                onShowVariants={onShowVariants}
+                onShowPreview={onShowPreview}
+                activeId={activeId}
+              />
+            ))}
           </div>
         ) : (
           <div className="relative">

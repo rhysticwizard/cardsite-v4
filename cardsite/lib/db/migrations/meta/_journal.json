@@ -43,6 +43,13 @@
       "when": 1749592841998,
       "tag": "0005_gigantic_wolfsbane",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1750107855933,
+      "tag": "0006_great_loners",
+      "breakpoints": true
     }
   ]
 }
