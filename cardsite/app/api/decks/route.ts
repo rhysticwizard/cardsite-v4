@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { decks, deckCards, cards } from '@/lib/db/schema';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 interface DeckCard {
   cardId: string; // This will be the Scryfall ID
@@ -46,18 +46,76 @@ export async function POST(request: NextRequest) {
       isPublic: deckData.isPublic || false,
     }).returning();
 
-    // Add cards to the deck - temporarily skip foreign key constraints
+    // Save deck cards properly to deckCards table
     if (deckData.cards && deckData.cards.length > 0) {
-      // For now, let's store the cards as JSON in the deck description
-      // This is a temporary solution until we implement proper card syncing
-      console.log('Deck cards to save:', deckData.cards);
-      
-      // Update the deck with card information in description for now
-      await db.update(decks)
-        .set({ 
-          description: `${deckData.description || ''}\n\nCards: ${JSON.stringify(deckData.cards)}` 
-        })
-        .where(eq(decks.id, newDeck.id));
+      // Find cards that don't exist in our database
+      const missingCardIds: string[] = [];
+      const existingCardMap = new Map<string, string>();
+
+      for (const deckCard of deckData.cards) {
+        const existingCard = await db
+          .select()
+          .from(cards)
+          .where(eq(cards.scryfallId, deckCard.cardId))
+          .limit(1);
+
+        if (existingCard.length === 0) {
+          missingCardIds.push(deckCard.cardId);
+        } else {
+          existingCardMap.set(deckCard.cardId, existingCard[0].id);
+        }
+      }
+
+      // Sync missing cards from Scryfall
+      if (missingCardIds.length > 0) {
+        console.log(`Syncing ${missingCardIds.length} missing cards from Scryfall`);
+        try {
+          const syncResponse = await fetch(`${request.nextUrl.origin}/api/cards/sync`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              // Skip CSRF for internal server-to-server requests
+              'x-internal-request': 'true',
+            },
+            body: JSON.stringify({ cardIds: missingCardIds }),
+          });
+
+          if (syncResponse.ok) {
+            // Refresh card mappings after sync
+            for (const cardId of missingCardIds) {
+              const existingCard = await db
+                .select()
+                .from(cards)
+                .where(eq(cards.scryfallId, cardId))
+                .limit(1);
+
+              if (existingCard.length > 0) {
+                existingCardMap.set(cardId, existingCard[0].id);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Failed to sync cards:', error);
+        }
+      }
+
+      // Insert deck cards for all cards we have
+      const validDeckCards = deckData.cards.filter(deckCard => 
+        existingCardMap.has(deckCard.cardId)
+      );
+
+      if (validDeckCards.length > 0) {
+        const deckCardInserts = validDeckCards.map(deckCard => ({
+          deckId: newDeck.id,
+          cardId: existingCardMap.get(deckCard.cardId)!,
+          quantity: deckCard.quantity,
+          category: deckCard.category,
+        }));
+
+        await db.insert(deckCards).values(deckCardInserts);
+      }
+
+      console.log(`Saved deck "${newDeck.name}" with ${validDeckCards.length}/${deckData.cards.length} cards`);
     }
 
     return NextResponse.json({
@@ -98,9 +156,28 @@ export async function GET(request: NextRequest) {
       .where(eq(decks.userId, session.user.id))
       .orderBy(decks.updatedAt);
 
+    // Get card counts for each deck
+    const decksWithCounts = await Promise.all(
+      userDecks.map(async (deck) => {
+        const cardCounts = await db
+          .select({
+            quantity: deckCards.quantity
+          })
+          .from(deckCards)
+          .where(eq(deckCards.deckId, deck.id));
+
+        const totalCards = cardCounts.reduce((sum, { quantity }) => sum + quantity, 0);
+
+        return {
+          ...deck,
+          cardCount: totalCards
+        };
+      })
+    );
+
     return NextResponse.json({
       success: true,
-      decks: userDecks
+      decks: decksWithCounts
     });
 
   } catch (error) {

@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Users, Crown, Flame } from 'lucide-react';
 import Link from 'next/link';
+import { UserDecksDisplay } from '@/components/mtg/user-decks-display';
 
 export default function DecksPage() {
   const topStandardDecks = Array(8).fill(null);
@@ -33,10 +34,7 @@ export default function DecksPage() {
             </div>
           </div>
           
-          <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-2">
-            <Card className="bg-gray-900 border-gray-800 overflow-hidden w-16 h-16">
-            </Card>
-          </div>
+          <UserDecksDisplay />
         </div>
 
         {/* Top 8 Standard Decks */}

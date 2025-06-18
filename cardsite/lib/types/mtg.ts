@@ -56,6 +56,23 @@ export interface MTGCard {
     art_crop: string;
     border_crop: string;
   };
+  card_faces?: Array<{
+    name: string;
+    mana_cost?: string;
+    type_line: string;
+    oracle_text?: string;
+    power?: string;
+    toughness?: string;
+    colors?: string[];
+    image_uris?: {
+      small: string;
+      normal: string;
+      large: string;
+      png: string;
+      art_crop: string;
+      border_crop: string;
+    };
+  }>;
   prices: {
     usd?: string;
     usd_foil?: string;

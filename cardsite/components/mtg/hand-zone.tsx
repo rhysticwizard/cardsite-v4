@@ -63,8 +63,8 @@ function HandCardComponent({
     position: 'absolute',
     transition: isDragging ? 'none' : 'all 0.2s ease-out',
     opacity: isDragging ? 0 : 1, // Make completely invisible when dragging
-    width: `${120 * position.scale}px`,
-    height: `${168 * position.scale}px`,
+    width: `${150 * position.scale}px`,
+    height: `${209 * position.scale}px`,
     cursor: isDragging ? 'grabbing' : 'grab',
     visibility: isDragging ? 'hidden' : 'visible' // Hide the element completely
   };
@@ -87,18 +87,26 @@ function HandCardComponent({
       {...listeners}
       {...attributes}
     >
-      {card.image_uris?.normal ? (
-        <img 
-          src={card.image_uris.normal} 
-          alt={card.name} 
-          className="w-full h-full object-cover"
-          draggable={false} // Prevent image itself from being draggable
-        />
-      ) : (
-        <div className="w-full h-full bg-gray-800 flex items-center justify-center text-white text-sm p-2 text-center">
-          <p>{card.name}</p>
-        </div>
-      )}
+      {(() => {
+        // Use the same double-faced card logic as other components
+        const isDoubleFaced = (card as any).card_faces && (card as any).card_faces.length >= 2;
+        const imageUrl = isDoubleFaced 
+          ? (card as any).card_faces[0]?.image_uris?.normal
+          : card.image_uris?.normal || (card as any).card_faces?.[0]?.image_uris?.normal;
+        
+        return imageUrl ? (
+          <img 
+            src={imageUrl} 
+            alt={card.name} 
+            className="w-full h-full object-cover"
+            draggable={false} // Prevent image itself from being draggable
+          />
+        ) : (
+          <div className="w-full h-full bg-gray-800 flex items-center justify-center text-white text-sm p-2 text-center">
+            <p>{card.name}</p>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -143,7 +151,7 @@ export function HandZone({
   }, [cards.length]);
   
   // Constants for carousel
-  const MAX_VISIBLE_CARDS = 14;
+  const MAX_VISIBLE_CARDS = 10;
   const needsCarousel = cards.length > MAX_VISIBLE_CARDS;
   
   // Get visible cards based on carousel offset
@@ -157,12 +165,24 @@ export function HandZone({
   
   const visibleCards = getVisibleCards();
   
-  // Reset carousel offset if it goes out of bounds
+  // Auto-scroll to show newest cards (rightmost) when hand grows beyond 10 cards
+  useEffect(() => {
+    if (needsCarousel) {
+      // Always show the rightmost cards (newest cards)
+      const maxOffset = Math.max(0, cards.length - MAX_VISIBLE_CARDS);
+      setCarouselOffset(maxOffset);
+    } else {
+      // Reset offset when we don't need carousel
+      setCarouselOffset(0);
+    }
+  }, [cards.length, needsCarousel]);
+  
+  // Reset carousel offset if it goes out of bounds (backup safety check)
   useEffect(() => {
     if (needsCarousel && carouselOffset >= cards.length) {
       setCarouselOffset(Math.max(0, cards.length - MAX_VISIBLE_CARDS));
     }
-  }, [cards.length, carouselOffset, needsCarousel]);
+  }, [carouselOffset, needsCarousel, cards.length]);
   
   // Carousel navigation functions
   const goToPrevious = () => {
@@ -183,68 +203,87 @@ export function HandZone({
     
     console.log("Calculating positions for", visibleCardCount, "visible cards out of", cards.length, "total cards");
     
-    // Card dimensions - always use base values (no scaling)
-    const cardWidth = 120;
-    const cardHeight = 168; // 5:7 aspect ratio
+    // Card dimensions - match battlefield card size
+    const cardWidth = 150;
+    const cardHeight = 209; // 5:7 aspect ratio - same as battlefield cards
     const scale = 1.0; // Always keep cards at full size
     
     // Get container dimensions
     const containerWidth = containerRef.current?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1920);
-    const containerHeight = containerRef.current?.clientHeight || 280;
+    const containerHeight = containerRef.current?.clientHeight || 160;
     
     console.log("Using container dimensions:", containerWidth, "x", containerHeight);
     
     // Calculate available width, accounting for margins
     const availableWidth = containerWidth - 80; // 40px margin on each side
     
-    // Always base arc calculations on the maximum possible cards (14)
+    // Always base arc calculations on the maximum possible cards (10)
     // This ensures cards maintain consistent arc positions as more are added
     const arcCardCount = Math.min(visibleCardCount, MAX_VISIBLE_CARDS);
+    const arcMiddleIndex = (arcCardCount - 1) / 2;
     
-    // Calculate the spacing between cards
-    const maxCardSpacing = cardWidth + 20; // Preferred spacing between cards
-    const totalPreferredWidth = arcCardCount * maxCardSpacing;
-    const cardSpacing = totalPreferredWidth > availableWidth ? 
-      Math.max(cardWidth * 0.6, availableWidth / arcCardCount) : // Overlap if needed, but maintain minimum
-      maxCardSpacing;
+    // Calculate spacing to fit all visible cards within available width
+    let baseSpacing: number;
     
-    // Calculate the actual width used by all cards
-    const actualHandWidth = (arcCardCount - 1) * cardSpacing + cardWidth;
+    if (visibleCardCount === 1) {
+      // Single card - no spacing needed
+      baseSpacing = 0;
+    } else {
+      // Start with ideal spacing and reduce as needed
+      const idealSpacing = cardWidth * 0.7; // 70% of card width for good visibility
+      
+      // Calculate what spacing would be needed to fit all cards
+      const requiredSpacing = availableWidth / (visibleCardCount - 1);
+      
+      // Use ideal spacing if we have room, otherwise use required spacing
+      baseSpacing = Math.min(idealSpacing, requiredSpacing);
     
-    // Center the hand horizontally
-    const startX = (containerWidth - actualHandWidth) / 2 + (cardWidth / 2);
+      // Ensure minimum spacing of at least 30px to prevent cards from being too close
+      baseSpacing = Math.max(baseSpacing, 30);
+    }
     
-    // Arc calculations for natural hand appearance
-    const arcRadius = Math.max(600, actualHandWidth * 0.8); // Minimum radius of 600px
-    const maxArcAngle = Math.min(30, arcCardCount * 2); // Maximum total arc angle
-    const anglePerCard = maxArcAngle / Math.max(1, arcCardCount - 1);
-    const startAngle = -maxArcAngle / 2;
+    // Calculate total width needed
+    const totalWidth = baseSpacing * (visibleCardCount - 1);
     
-    // Calculate Y position - cards should be at the bottom of the container
-    const baseY = containerHeight - (cardHeight / 2) - 20; // 20px margin from bottom
+    // Start x position to center the entire hand (center of first card)
+    const startX = (containerWidth - totalWidth) / 2;
     
+    console.log("Start X position:", startX, "Total width:", totalWidth, "Available width:", availableWidth, "Spacing:", baseSpacing);
+    
+    // Calculate positions for each visible card
     return visibleCards.map((card, index) => {
-      // Linear X position
-      const x = startX + (index * cardSpacing);
+      // Calculate horizontal position
+      const x = startX + (index * baseSpacing);
       
-      // Arc calculations for Y position and rotation
-      const angle = startAngle + (index * anglePerCard);
-      const radians = (angle * Math.PI) / 180;
+      // Calculate vertical position with arc effect based on max card positions
+      // Use the card's position in the full arc (not just visible cards)
+      const arcPosition = index; // Position within the visible cards
+      const distanceFromArcMiddle = Math.abs(arcPosition - arcMiddleIndex);
       
-      // Y position follows an arc
-      const arcY = Math.sin(radians) * (arcRadius / 10); // Subtle arc
-      const y = baseY + arcY;
+      // Maximum lift for arc effect (constant regardless of card count)
+      const maxLift = 40;
       
-      // Rotation follows the arc tangent for natural feel
-      const rotation = angle * 0.8; // Slightly less rotation than the angle
+      // Quadratic function for smoother arc: y = a * x^2
+      const scaleFactor = maxLift / Math.pow(Math.max(arcMiddleIndex, 1), 2);
+      const lift = maxLift - (scaleFactor * Math.pow(distanceFromArcMiddle, 2));
       
-      console.log(`Card ${index}: x=${x}, y=${y}, rotation=${rotation}, angle=${angle}`);
+      // Final y position (bottom of container minus card height minus lift)
+      const y = containerHeight - cardHeight - 20 - lift;
+      
+      // Calculate rotation for fan effect based on arc position
+      // Cards on left rotate counterclockwise, cards on right rotate clockwise
+      const maxRotation = 15; // Constant rotation regardless of card count
+      const rotation = maxRotation * (arcPosition - arcMiddleIndex) / Math.max(arcMiddleIndex, 1);
+      
+      // Check if this card is currently hovered
+      const isHovered = card.instanceId === hoveredCardId;
       
       return {
         x,
         y,
         rotation,
-        scale
+        scale, // Always 1.0 - no scaling
+        isHovered
       };
     });
   };
@@ -289,7 +328,7 @@ export function HandZone({
     <div 
       ref={setRefs}
       className={`
-        absolute bottom-0 left-0 right-0 h-[280px]
+        absolute bottom-0 left-0 right-0 h-[160px]
         flex justify-center items-end
         pointer-events-none z-20
         px-10 transition-colors duration-200
@@ -303,13 +342,21 @@ export function HandZone({
         </div>
       )}
       
+      {/* Left indicator for hidden cards */}
+      {needsCarousel && carouselOffset > 0 && (
+        <div className="absolute left-2 bottom-16 bg-black/80 text-white text-xs px-2 py-1 rounded pointer-events-auto z-30">
+          +{carouselOffset} more
+        </div>
+      )}
+      
       {/* Hand cards */}
-      {visibleCards.map((card, index) => {
-        const position = cardPositions[index];
-        if (!position) return null;
+      {cardPositions.map((cardData, index) => {
+        const { x, y, rotation, scale, isHovered } = cardData;
+        const card = visibleCards[index];
+        if (!card) return null;
         
-        const isHovered = hoveredCardId === card.instanceId;
         const zIndex = getZIndex(index, isHovered);
+        const position = { x, y, rotation, scale };
         
         return (
           <HandCardComponent

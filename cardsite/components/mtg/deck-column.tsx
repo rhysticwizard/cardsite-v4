@@ -26,11 +26,13 @@ interface DeckColumnProps {
   onShowVariants?: (cardName: string, cardId: string) => void;
   onShowPreview?: (card: MTGCard) => void;
   onColumnDelete?: (columnId: string) => void;
+  onColumnRename?: (columnId: string, newTitle: string) => void;
   activeId: string | null;
   viewMode?: 'visual' | 'text';
+  isViewMode?: boolean;
 }
 
-export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, onCardChange, onShowVariants, onShowPreview, onColumnDelete, activeId, viewMode = 'visual' }: DeckColumnProps) {
+export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, onCardChange, onShowVariants, onShowPreview, onColumnDelete, onColumnRename, activeId, viewMode = 'visual', isViewMode = false }: DeckColumnProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showColumnOptions, setShowColumnOptions] = useState(false);
   const [showStartsInPlay, setShowStartsInPlay] = useState(false);
@@ -88,13 +90,17 @@ export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, o
   const handleRenameSubmit = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       setIsRenaming(false);
-      // Here you could add a callback to update the title in the parent component
+      if (onColumnRename && newTitle !== title) {
+        onColumnRename(id, newTitle);
+      }
     }
   };
 
   const handleRenameBlur = () => {
     setIsRenaming(false);
-    // Here you could add a callback to update the title in the parent component
+    if (onColumnRename && newTitle !== title) {
+      onColumnRename(id, newTitle);
+    }
   };
 
   // Calculate the total height needed for cards based on view mode
@@ -113,10 +119,12 @@ export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, o
   return (
     <div 
       ref={setNodeRef}
-      className={`w-[220px] rounded-lg overflow-visible bg-black border-2 border-dashed transition-colors duration-200 ${
-        cards.length === 0 
-          ? (isOver ? 'border-white' : 'border-gray-600')
-          : (isOver ? 'border-white' : 'border-transparent')
+      className={`w-[220px] rounded-lg overflow-visible bg-black border-2 transition-colors duration-200 ${
+        isViewMode 
+          ? 'border-transparent' 
+          : cards.length === 0 
+            ? (isOver ? 'border-white border-dashed' : 'border-gray-600 border-dashed')
+            : (isOver ? 'border-white border-dashed' : 'border-transparent')
       }`}
       style={{ height: `${calculateHeight()}px` }}
     >
@@ -134,15 +142,17 @@ export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, o
           />
         ) : (
           <button
-            onClick={() => setShowDropdown(!showDropdown)}
-            className="w-full flex items-center justify-between px-4 py-2 text-sm font-medium text-white hover:text-gray-300 transition-colors border-b border-gray-600 bg-black rounded-t-lg cursor-pointer"
+            onClick={!isViewMode ? () => setShowDropdown(!showDropdown) : undefined}
+            className={`w-full flex items-center justify-between px-4 py-2 text-sm font-medium text-white transition-colors border-b border-gray-600 bg-black rounded-t-lg ${
+              !isViewMode ? 'hover:text-gray-300 cursor-pointer' : 'cursor-default'
+            }`}
           >
             <span>{newTitle}</span>
-            <ChevronDown className="w-4 h-4" />
+            {!isViewMode && <ChevronDown className="w-4 h-4" />}
           </button>
         )}
             
-        {showDropdown && (
+        {showDropdown && !isViewMode && (
           <div className="absolute left-0 top-full w-full bg-black border border-gray-600 shadow-xl z-50">
             <div className="py-1">
               <button
@@ -236,7 +246,7 @@ export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, o
       </div>
 
       {/* Cards Container - MTG Arena style stacking */}
-      <div className="relative px-4 py-4 min-h-[300px]">
+      <div className="relative px-0 py-4 min-h-[300px]">
         {/* Invisible drop overlay - ensures drop zone is always accessible */}
         <div 
           className="absolute inset-0 z-0 pointer-events-none"
@@ -247,7 +257,7 @@ export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, o
         
         {cards.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-center text-gray-500">
-            <p className="text-sm">Drag cards here</p>
+            {!isViewMode && <p className="text-sm">Drag cards here</p>}
           </div>
         ) : viewMode === 'text' ? (
           <div className="space-y-2">
@@ -260,10 +270,10 @@ export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, o
                 category={cardData.category}
                 onRemove={() => onCardRemove(cardData.id, cardData.category)}
                 onQuantityChange={(newQuantity) => onQuantityChange(cardData.id, cardData.category, newQuantity)}
-                onCardChange={(newCard) => onCardChange?.(cardData.id, cardData.category, newCard)}
                 onShowVariants={onShowVariants}
                 onShowPreview={onShowPreview}
                 activeId={activeId}
+                isViewMode={isViewMode}
               />
             ))}
           </div>
@@ -292,6 +302,7 @@ export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, o
                   onShowPreview={onShowPreview}
                   isTopCard={index === cards.length - 1}
                   activeId={activeId}
+                  isViewMode={isViewMode}
                 />
               </div>
             ))}

@@ -12,6 +12,9 @@ interface PlaytestCardProps {
   onTap: () => void;
   id: string;
   isDragging?: boolean;
+  zIndex?: number;
+  onMouseEnter?: (card: MTGCard, event: React.MouseEvent) => void;
+  onMouseLeave?: () => void;
 }
 
 export function PlaytestCard({
@@ -20,7 +23,10 @@ export function PlaytestCard({
   tapped,
   onTap,
   id,
-  isDragging = false
+  isDragging = false,
+  zIndex = 10,
+  onMouseEnter,
+  onMouseLeave
 }: PlaytestCardProps) {
   // Use draggable hook with proper configuration
   const {
@@ -60,13 +66,31 @@ export function PlaytestCard({
     onTap();
   };
 
-  // Get card image URL with fallback
+  // Get card image URL with fallback (using the same pattern as deck-card.tsx)
   const getCardImageUrl = (card: MTGCard): string => {
-    if (card.image_uris?.normal) {
-      return card.image_uris.normal;
+    // Check if card is double-faced
+    const isDoubleFaced = (card as any).card_faces && (card as any).card_faces.length >= 2;
+    
+    // Get image URL using the same pattern as deck builder
+    const imageUrl = isDoubleFaced 
+      ? (card as any).card_faces[0]?.image_uris?.normal
+      : card.image_uris?.normal || (card as any).card_faces?.[0]?.image_uris?.normal;
+    
+    // Debug logging for double-faced cards
+    if (!imageUrl) {
+      console.log('PlaytestCard: No image URL found for card:', {
+        name: card.name,
+        isDoubleFaced,
+        hasImageUris: !!card.image_uris,
+        hasCardFaces: !!(card as any).card_faces,
+        cardFacesLength: (card as any).card_faces?.length || 0,
+        firstFaceImageUris: (card as any).card_faces?.[0]?.image_uris,
+        rawCard: card
+      });
     }
-    // Fallback to a Magic card back image
-    return 'https://cards.scryfall.io/normal/back/0/0/0aeebaf5-8c7d-4636-9e82-8c27447861f7.jpg';
+    
+    // Return the image URL or fallback
+    return imageUrl || 'https://cards.scryfall.io/normal/back/0/0/0aeebaf5-8c7d-4636-9e82-8c27447861f7.jpg';
   };
 
   // Parse mana cost for display
@@ -94,6 +118,7 @@ export function PlaytestCard({
   // Combine container styles - ensure proper transform handling
   const containerStyle: CSSProperties = {
     ...style,
+    zIndex: isCurrentlyDragging ? 1000 : zIndex, // Higher z-index when dragging
     ...(containerTransform ? { 
       transform: `translate(-50%, -50%) ${containerTransform}` 
     } : { 
@@ -104,13 +129,15 @@ export function PlaytestCard({
   return (
     <div
       ref={setNodeRef}
-      className={`absolute cursor-grab active:cursor-grabbing z-10 ${
+      className={`absolute cursor-grab active:cursor-grabbing ${
         isCurrentlyDragging ? 'opacity-80' : ''
       }`}
       style={containerStyle}
       {...attributes}
       {...listeners}
       onClick={handleClick}
+      onMouseEnter={(e) => onMouseEnter?.(card, e)}
+      onMouseLeave={onMouseLeave}
       tabIndex={0}
       role="button"
       aria-label={`${card.name}${tapped ? ' (tapped)' : ''} - Click to ${tapped ? 'untap' : 'tap'}`}

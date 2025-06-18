@@ -12,11 +12,12 @@ import {
   pointerWithin,
   DragOverlay,
 } from '@dnd-kit/core';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { searchCards, getCardVariants, getRandomCard } from '@/lib/api/scryfall';
 import type { MTGCard } from '@/lib/types/mtg';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { secureApiRequest } from '@/lib/csrf';
 import { Search, Download, Upload, Play, Info, Save, Loader2, X as XIcon, Shuffle, Sliders, ChevronDown, Grid, List } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
@@ -25,6 +26,8 @@ import { DeckColumn } from './deck-column';
 import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { DraftDeckStorage, type DraftDeck, type DraftCard } from '@/lib/utils/draft-deck-storage';
+import { UnsavedChangesBanner } from '@/components/ui/unsaved-changes-banner';
 
 interface DeckCardData {
   id: string;
@@ -52,9 +55,17 @@ const CARD_CATEGORIES = {
   sideboard: 'Sideboard'
 } as const;
 
-export function DeckBuilderClient() {
+interface DeckBuilderClientProps {
+  isViewMode?: boolean;
+  deckId?: string;
+  isDraftMode?: boolean;
+  draftId?: string;
+}
+
+export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = false, draftId }: DeckBuilderClientProps = {}) {
   const { data: session } = useSession();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -105,6 +116,11 @@ export function DeckBuilderClient() {
   const [deckDescription, setDeckDescription] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Draft-specific state
+  const [currentDraft, setCurrentDraft] = useState<DraftDeck | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isDraftSaving, setIsDraftSaving] = useState(false);
+
   // Combine default and custom columns
   const allColumns = { ...CARD_CATEGORIES, ...customColumns };
   
@@ -126,34 +142,380 @@ export function DeckBuilderClient() {
     queryFn: () => showingVariantsFor 
       ? getCardVariants(showingVariantsFor.cardName)
       : searchCards({ q: searchQuery }),
-    enabled: showingVariantsFor ? true : searchQuery.trim().length > 2,
+    enabled: !isViewMode && (showingVariantsFor ? true : searchQuery.trim().length > 2),
     staleTime: 1000 * 60 * 5,
   });
+
+  // Load existing deck when deckId is provided (view mode or edit mode)
+  const { data: existingDeck, isLoading: deckLoading } = useQuery({
+    queryKey: ['deck-detail', deckId],
+    queryFn: async () => {
+      const response = await secureApiRequest(`/api/decks/${deckId}`);
+      if (!response.ok) throw new Error('Failed to fetch deck');
+      return response.json();
+    },
+    enabled: !!deckId && !!session?.user,
+  });
+
+  // Load existing deck data when deckId is provided
+  useEffect(() => {
+    if (deckId && existingDeck?.success && existingDeck.deck) {
+      const loadedDeck = existingDeck.deck;
+      
+      // Load basic deck info
+      setDeck(prev => ({ ...prev, name: loadedDeck.name }));
+      setDeckFormat(loadedDeck.format);
+      
+      // Parse description to extract user description and column structure
+      let userDescription = '';
+      let savedColumnStructure = null;
+      
+      try {
+        if (loadedDeck.description) {
+          const parsed = JSON.parse(loadedDeck.description);
+          if (parsed.userDescription !== undefined && parsed.columnStructure) {
+            // New format with column structure
+            userDescription = parsed.userDescription || '';
+            savedColumnStructure = parsed.columnStructure;
+          } else {
+            // Old format - just description text
+            userDescription = loadedDeck.description;
+          }
+        }
+      } catch {
+        // If JSON parsing fails, treat as old format
+        userDescription = loadedDeck.description || '';
+      }
+      
+      setDeckDescription(userDescription);
+      
+      // Restore column structure if available
+      if (savedColumnStructure) {
+        setCustomColumns(savedColumnStructure.customColumns || {});
+        setColumnChildren(savedColumnStructure.columnChildren || {});
+        setDeletedBaseColumns(new Set(savedColumnStructure.deletedBaseColumns || []));
+      }
+      
+              // Load cards by category
+        if (loadedDeck.cards) {
+          const newDeckState: any = {
+            name: loadedDeck.name,
+            creatures: [],
+            spells: [],
+            artifacts: [],
+            enchantments: [],
+            lands: [],
+            sideboard: [],
+          };
+
+          // Add custom columns to deck state
+          if (savedColumnStructure?.customColumns) {
+            Object.keys(savedColumnStructure.customColumns).forEach(columnKey => {
+              newDeckState[columnKey] = [];
+            });
+          }
+
+        // Process each category
+        Object.entries(loadedDeck.cards).forEach(([category, categoryCards]: [string, any]) => {
+          if (Array.isArray(categoryCards)) {
+            const processedCards = categoryCards.map((deckCard: any) => ({
+              id: `${deckCard.card.scryfallId || deckCard.card.id}-${category}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              card: {
+                id: deckCard.card.scryfallId || deckCard.card.id,
+                oracle_id: deckCard.card.scryfallId || deckCard.card.id,
+                name: deckCard.card.name,
+                mana_cost: deckCard.card.manaCost || '',
+                cmc: deckCard.card.cmc || 0,
+                type_line: deckCard.card.typeLine || '',
+                oracle_text: deckCard.card.oracleText || '',
+                power: deckCard.card.power,
+                toughness: deckCard.card.toughness,
+                colors: deckCard.card.colors || [],
+                color_identity: deckCard.card.colorIdentity || [],
+                keywords: [],
+                legalities: deckCard.card.legalities || {},
+                games: ['paper'],
+                reserved: false,
+                foil: true,
+                nonfoil: true,
+                finishes: ['nonfoil'],
+                oversized: false,
+                promo: false,
+                reprint: false,
+                variation: false,
+                set_id: deckCard.card.setCode || '',
+                set: deckCard.card.setCode || '',
+                set_name: deckCard.card.setName || '',
+                set_type: 'expansion',
+                set_uri: '',
+                set_search_uri: '',
+                scryfall_set_uri: '',
+                rulings_uri: '',
+                prints_search_uri: '',
+                collector_number: deckCard.card.collectorNumber || '',
+                digital: false,
+                rarity: deckCard.card.rarity || 'common',
+                flavor_text: '',
+                card_back_id: '',
+                artist: '',
+                artist_ids: [],
+                illustration_id: '',
+                border_color: 'black',
+                frame: '2015',
+                security_stamp: '',
+                full_art: false,
+                textless: false,
+                booster: true,
+                story_spotlight: false,
+                edhrec_rank: 0,
+                penny_rank: 0,
+                image_uris: deckCard.card.imageUris,
+                card_faces: deckCard.card.cardFaces,
+                prices: deckCard.card.prices || {},
+                related_uris: {},
+                purchase_uris: {},
+              } as MTGCard,
+              quantity: deckCard.quantity,
+              category: category as 'creatures' | 'spells' | 'artifacts' | 'enchantments' | 'lands' | 'sideboard',
+            }));
+
+            // Map category names to deck state keys
+            const categoryKey = category as keyof Omit<DeckState, 'name'>;
+            if (categoryKey in newDeckState) {
+              newDeckState[categoryKey] = processedCards;
+            }
+          }
+        });
+
+        // Update the deck state with loaded cards
+        setDeck(newDeckState);
+      }
+    }
+  }, [deckId, existingDeck]);
+
+  // Load draft data when in draft mode
+  useEffect(() => {
+    if (isDraftMode && draftId) {
+      const draft = DraftDeckStorage.loadDraft(draftId);
+      if (draft) {
+        setCurrentDraft(draft);
+        setDeck(prev => ({ ...prev, name: draft.name }));
+        setDeckDescription(draft.description);
+        setDeckFormat(draft.format);
+        setCustomColumns(draft.customColumns);
+        
+        // Convert draft cards back to deck format
+        const newDeckState: any = {
+          name: draft.name,
+          creatures: [],
+          spells: [],
+          artifacts: [],
+          enchantments: [],
+          lands: [],
+          sideboard: [],
+        };
+
+        // Add custom categories
+        Object.keys(draft.customColumns).forEach(key => {
+          newDeckState[key] = [];
+        });
+
+        // Group cards by category
+        draft.cards.forEach(draftCard => {
+          if (!newDeckState[draftCard.category]) {
+            newDeckState[draftCard.category] = [];
+          }
+          
+          // Convert draft card back to MTG card format
+          const mtgCard: MTGCard = {
+            id: draftCard.scryfallId,
+            oracle_id: '',
+            name: draftCard.name,
+            mana_cost: draftCard.manaCost || '',
+            cmc: 0,
+            type_line: draftCard.typeLine || '',
+            oracle_text: '',
+            power: '',
+            toughness: '',
+            colors: [],
+            color_identity: [],
+            keywords: [],
+            legalities: {},
+            games: [],
+            reserved: false,
+            foil: false,
+            nonfoil: true,
+            finishes: [],
+            oversized: false,
+            promo: false,
+            reprint: false,
+            variation: false,
+            set_id: '',
+            set: '',
+            set_name: '',
+            set_type: '',
+            set_uri: '',
+            set_search_uri: '',
+            scryfall_set_uri: '',
+            rulings_uri: '',
+            prints_search_uri: '',
+            collector_number: '',
+            digital: false,
+            rarity: 'common',
+            card_back_id: '',
+            artist_ids: [],
+            border_color: '',
+            frame: '',
+            full_art: false,
+            textless: false,
+            booster: false,
+            story_spotlight: false,
+            image_uris: {
+              small: draftCard.imageUris?.normal || '',
+              normal: draftCard.imageUris?.normal || '',
+              large: draftCard.imageUris?.normal || '',
+              png: draftCard.imageUris?.normal || '',
+              art_crop: draftCard.imageUris?.normal || '',
+              border_crop: draftCard.imageUris?.normal || '',
+            },
+            prices: {
+              usd: '',
+              usd_foil: '',
+              usd_etched: '',
+              eur: '',
+              eur_foil: '',
+              tix: '',
+            },
+            related_uris: {},
+          };
+
+          const deckCardData: DeckCardData = {
+            id: `${draftCard.scryfallId}-${draftCard.category}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            card: mtgCard,
+            quantity: draftCard.quantity,
+            category: draftCard.category as any,
+          };
+
+          newDeckState[draftCard.category].push(deckCardData);
+        });
+
+        setDeck(newDeckState);
+        setHasUnsavedChanges(true);
+      }
+    } else if (isDraftMode && !draftId) {
+      // Create new draft
+      const newDraft = DraftDeckStorage.createDraft();
+      setCurrentDraft(newDraft);
+      setHasUnsavedChanges(true);
+    }
+  }, [isDraftMode, draftId]);
 
   // Save deck mutation
   const saveDeckMutation = useMutation({
     mutationFn: async (deckData: any) => {
-      const response = await fetch('/api/decks', {
-        method: 'POST',
+      // Determine if we're updating an existing deck or creating a new one
+      const isEditing = !isDraftMode && deckId;
+      
+      const payload = isEditing 
+        ? { ...deckData, deckId } // Include deckId for updates
+        : deckData;
+      
+      const response = await secureApiRequest('/api/decks', {
+        method: isEditing ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(deckData),
+        body: JSON.stringify(payload),
       });
       
       if (!response.ok) {
-        throw new Error('Failed to save deck');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save deck');
       }
       
       return response.json();
     },
     onSuccess: (data) => {
-      console.log('Deck saved successfully:', data);
+      const isEditing = !isDraftMode && deckId;
+      console.log(`Deck ${isEditing ? 'updated' : 'created'} successfully:`, data);
+      
+      // If we were in draft mode, clean up the draft
+      if (isDraftMode && currentDraft) {
+        DraftDeckStorage.deleteDraft(currentDraft.id);
+        setHasUnsavedChanges(false);
+        setIsDraftSaving(false);
+      }
+      
+      // Log success message (removed alert popup)
+      console.log(`Deck "${deck.name}" ${isEditing ? 'updated' : 'saved'} successfully!`);
+      // Refresh user decks cache so the decks page updates
+      queryClient.invalidateQueries({ queryKey: ['user-decks'] });
+      
+      // Clear the deck detail cache to force fresh load on view page
+      if (isEditing && deckId) {
+        queryClient.removeQueries({ queryKey: ['deck-detail', deckId] });
+      }
+      
+      // Navigate to view mode 
+      if (isEditing && deckId) {
+        // If we were editing, stay on the same deck (just go back to view mode)
+        router.push(`/decks/${deckId}`);
+      } else if (data.deck?.id) {
+        // If we were creating new (from draft), navigate to new deck
+        router.push(`/decks/${data.deck.id}`);
+      }
     },
     onError: (error) => {
       console.error('Failed to save deck:', error);
+      alert(`Failed to save deck: ${error.message}`);
+      if (isDraftMode) {
+        setIsDraftSaving(false);
+      }
     },
   });
+
+  // Auto-save draft when deck changes (excluding currentDraft from dependencies to prevent infinite loop)
+  useEffect(() => {
+    if (isDraftMode && currentDraft) {
+      const draftCards: DraftCard[] = [];
+      
+      // Convert current deck state to draft format
+      Object.entries(deck).forEach(([category, cards]) => {
+        if (category !== 'name' && Array.isArray(cards)) {
+          cards.forEach((deckCard: DeckCardData) => {
+            draftCards.push({
+              scryfallId: deckCard.card.id,
+              name: deckCard.card.name,
+              quantity: deckCard.quantity,
+              category: deckCard.category,
+              manaCost: deckCard.card.mana_cost,
+              typeLine: deckCard.card.type_line,
+              imageUris: deckCard.card.image_uris,
+            });
+          });
+        }
+      });
+
+      const updatedDraft: DraftDeck = {
+        ...currentDraft,
+        name: deck.name,
+        description: deckDescription,
+        format: deckFormat,
+        cards: draftCards,
+        customColumns: customColumns,
+      };
+
+      // Only auto-save, don't update the currentDraft state to prevent infinite loop
+      DraftDeckStorage.autoSave(updatedDraft);
+    }
+  }, [isDraftMode, deck, deckDescription, deckFormat, customColumns]);
+
+  // Mark as having unsaved changes when deck state changes (only after initial load)
+  useEffect(() => {
+    if (isDraftMode && currentDraft) {
+      setHasUnsavedChanges(true);
+    }
+  }, [isDraftMode, deck, deckDescription, deckFormat, customColumns]);
 
   // Calculate total card count
   const totalCards = (Object.keys(deck) as Array<keyof DeckState>).reduce((total, key) => {
@@ -505,6 +867,10 @@ export function DeckBuilderClient() {
       return;
     }
 
+    if (isDraftMode) {
+      setIsDraftSaving(true);
+    }
+
     // Convert deck to API format
     const allCards = Object.entries(deck)
       .filter(([key]) => key !== 'name')
@@ -517,16 +883,28 @@ export function DeckBuilderClient() {
       category: deckCard.category,
     }));
 
+    // Create enhanced description with custom column structure
+    const columnStructure = {
+      customColumns,
+      columnChildren,
+      deletedBaseColumns: Array.from(deletedBaseColumns),
+    };
+
+    const enhancedDescription = JSON.stringify({
+      userDescription: deckDescription,
+      columnStructure,
+    });
+
     const deckData = {
       name: deck.name,
-      description: deckDescription,
+      description: enhancedDescription,
       format: deckFormat,
       isPublic: false,
       cards: deckCards,
     };
 
     saveDeckMutation.mutate(deckData);
-  }, [session, router, deck, deckDescription, deckFormat, saveDeckMutation]);
+  }, [session, router, deck, deckDescription, deckFormat, saveDeckMutation, queryClient, isDraftMode]);
 
   // Add new column
   const addNewColumn = useCallback((afterColumnKey: string) => {
@@ -543,6 +921,17 @@ export function DeckBuilderClient() {
       [newColumnKey]: [] as any
     }));
   }, [customColumns]);
+
+  // Rename column
+  const renameColumn = useCallback((columnId: string, newTitle: string) => {
+    console.log('Renaming column:', columnId, 'to:', newTitle);
+    
+    // Store the custom name in customColumns regardless of whether it's a base or custom column
+    setCustomColumns(prev => ({
+      ...prev,
+      [columnId]: newTitle
+    }));
+  }, []);
 
   // Delete column
   const deleteColumn = useCallback((columnId: string) => {
@@ -767,6 +1156,17 @@ export function DeckBuilderClient() {
     }
   }, [handleSaveDeckName, handleCancelEditingDeckName]);
 
+  // Handle discarding draft
+  const handleDiscardDraft = useCallback(() => {
+    if (isDraftMode && currentDraft) {
+      if (confirm('Are you sure you want to discard all changes? This cannot be undone.')) {
+        DraftDeckStorage.deleteDraft(currentDraft.id);
+        setHasUnsavedChanges(false);
+        router.push('/deckbuilder'); // Navigate to fresh deck builder
+      }
+    }
+  }, [isDraftMode, currentDraft, router]);
+
   return (
     <div className="min-h-screen bg-black text-white">
       <DndContext
@@ -777,7 +1177,8 @@ export function DeckBuilderClient() {
         onDragEnd={handleDragEnd}
       >
         <div className="max-w-[1400px] mx-auto px-6 py-4">
-          {/* Search Bar */}
+          {/* Search Bar - Hidden in view mode */}
+          {!isViewMode && (
           <div className="mb-6">
             <div className="relative max-w-xl mx-auto">
               <Input
@@ -819,8 +1220,10 @@ export function DeckBuilderClient() {
               )}
             </div>
           </div>
+          )}
 
-          {/* Search Results */}
+          {/* Search Results - Hidden in view mode */}
+          {!isViewMode && (
           <div 
             className={`transition-all duration-300 ease-in-out overflow-hidden ${
               (searchQuery.trim().length > 2 || showingVariantsFor) 
@@ -837,6 +1240,7 @@ export function DeckBuilderClient() {
                 viewMode={viewMode}
               />
             </div>
+          )}
 
           {/* Advanced Search Panel */}
           <div className={`transition-all duration-300 ease-in-out overflow-hidden ${
@@ -1399,9 +1803,11 @@ export function DeckBuilderClient() {
                   />
                 ) : (
                   <h1 
-                    className="text-lg font-bold cursor-pointer hover:text-gray-300 transition-colors"
-                    onClick={handleStartEditingDeckName}
-                    title="Click to edit deck name"
+                    className={`text-lg font-bold transition-colors ${
+                      !isViewMode ? 'cursor-pointer hover:text-gray-300' : 'cursor-default'
+                    }`}
+                    onClick={!isViewMode ? handleStartEditingDeckName : undefined}
+                    title={!isViewMode ? "Click to edit deck name" : undefined}
                   >
                   {deck.name} · {totalCards} cards
                 </h1>
@@ -1435,6 +1841,8 @@ export function DeckBuilderClient() {
                   </button>
                 </div>
                 
+                {!isViewMode && (
+                  <>
                 <Button variant="ghost" size="sm" className="text-white hover:text-gray-300">
                   Undo
                   <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1447,10 +1855,9 @@ export function DeckBuilderClient() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" />
                   </svg>
                 </Button>
-                <Button variant="ghost" size="sm" className="text-white hover:text-gray-300">
-                  Export
-                  <Upload className="w-4 h-4 ml-1" />
-                </Button>
+                  </>
+                )}
+                {!isViewMode && (
                 <Button 
                   variant="ghost" 
                   size="sm" 
@@ -1460,7 +1867,17 @@ export function DeckBuilderClient() {
                   Import
                   <Download className="w-4 h-4 ml-1" />
                 </Button>
+                )}
                 <Button variant="ghost" size="sm" className="text-white hover:text-gray-300">
+                  Export
+                  <Upload className="w-4 h-4 ml-1" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-white hover:text-gray-300"
+                  onClick={() => router.push(`/playmat${deckId ? `?deckId=${deckId}` : ''}`)}
+                >
                   Playtest
                   <Play className="w-4 h-4 ml-1" />
                 </Button>
@@ -1468,6 +1885,17 @@ export function DeckBuilderClient() {
                   Details
                   <Info className="w-4 h-4 ml-1" />
                 </Button>
+                {isViewMode ? (
+                  <Button 
+                    variant="ghost"
+                    size="sm" 
+                    className="text-white hover:text-gray-300"
+                    onClick={() => router.push(`/decks/${deckId}/edit`)}
+                  >
+                    Edit
+                    <Save className="w-4 h-4 ml-1" />
+                  </Button>
+                ) : (
                 <Button 
                   variant="ghost"
                   size="sm" 
@@ -1482,6 +1910,7 @@ export function DeckBuilderClient() {
                     <Save className="w-4 h-4 ml-1" />
                   )}
                 </Button>
+                )}
               </div>
             </div>
             <hr className="border-gray-600 mt-4" />
@@ -1490,9 +1919,9 @@ export function DeckBuilderClient() {
                       {/* Deck Columns */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                               {baseColumns.map((key) => {
-                // If this base column is deleted, show just a small plus button
+                // If this base column is deleted, show just a small plus button (only in edit mode)
                 if (deletedBaseColumns.has(key)) {
-                  return (
+                  return !isViewMode ? (
                     <div key={key} className="flex flex-col space-y-4">
                       <button
                         type="button"
@@ -1506,7 +1935,7 @@ export function DeckBuilderClient() {
                         </svg>
                       </button>
                     </div>
-                  );
+                  ) : null;
                 }
                 
                 // Normal column rendering
@@ -1516,7 +1945,7 @@ export function DeckBuilderClient() {
                     <div className="flex flex-col">
                       <DeckColumn
                         id={key}
-                        title={CARD_CATEGORIES[key as keyof typeof CARD_CATEGORIES]}
+                        title={customColumns[key] || CARD_CATEGORIES[key as keyof typeof CARD_CATEGORIES]}
                         cards={deck[key as keyof Omit<DeckState, 'name'>] || []}
                         onCardRemove={removeCardFromDeck}
                         onQuantityChange={updateCardQuantity}
@@ -1524,11 +1953,13 @@ export function DeckBuilderClient() {
                       onShowVariants={showCardVariants}
                       onShowPreview={handleCardPreview}
                         onColumnDelete={deleteColumn}
+                        onColumnRename={renameColumn}
                         activeId={activeId}
                         viewMode={viewMode}
+                        isViewMode={isViewMode}
                       />
                       {/* Plus button to add column below this one - only show if no children */}
-                      {(!columnChildren[key] || columnChildren[key].length === 0) && (
+                      {!isViewMode && (!columnChildren[key] || columnChildren[key].length === 0) && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -1586,11 +2017,13 @@ export function DeckBuilderClient() {
                           onShowVariants={showCardVariants}
                           onShowPreview={handleCardPreview}
                             onColumnDelete={deleteColumn}
+                            onColumnRename={renameColumn}
                             activeId={activeId}
                             viewMode={viewMode}
+                            isViewMode={isViewMode}
                           />
                           {/* Plus button only on the last child in the stack */}
-                          {isLastChild && (
+                          {!isViewMode && isLastChild && (
                             <button
                               type="button"
                               onClick={(e) => {

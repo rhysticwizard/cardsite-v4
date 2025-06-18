@@ -22,9 +22,10 @@ interface DeckCardProps {
   onShowPreview?: (card: MTGCard) => void;
   isTopCard?: boolean;
   activeId: string | null;
+  isViewMode?: boolean;
 }
 
-export function DeckCard({ id, card, quantity, category, onRemove, onQuantityChange, onCardChange, onShowVariants, onShowPreview, isTopCard = true, activeId }: DeckCardProps) {
+export function DeckCard({ id, card, quantity, category, onRemove, onQuantityChange, onCardChange, onShowVariants, onShowPreview, isTopCard = true, activeId, isViewMode = false }: DeckCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editQuantity, setEditQuantity] = useState(quantity.toString());
   const [showPreview, setShowPreview] = useState(false);
@@ -184,8 +185,10 @@ export function DeckCard({ id, card, quantity, category, onRemove, onQuantityCha
       >
         {/* Card */}
         <div
-          {...listeners}
-          className="relative aspect-[5/7] w-48 rounded-lg overflow-hidden transition-all duration-200 bg-gray-800 border border-gray-600 cursor-grab active:cursor-grabbing hover:shadow-xl hover:shadow-white/20"
+          {...(!isViewMode ? listeners : {})}
+          className={`relative aspect-[5/7] w-48 rounded-lg overflow-hidden transition-all duration-200 bg-gray-800 border border-gray-600 ${
+            !isViewMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
+          } hover:shadow-xl hover:shadow-white/20`}
           style={{
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
           }}
@@ -215,7 +218,7 @@ export function DeckCard({ id, card, quantity, category, onRemove, onQuantityCha
         )}
 
         {/* Combined Control Bar - all controls in one horizontal bar at top */}
-        {(
+        {!isViewMode && (
           <div className={`absolute top-0 left-0 right-0 transition-opacity duration-200 z-20 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
             <div 
               {...listeners}

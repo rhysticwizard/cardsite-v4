@@ -1,5 +1,6 @@
 import { pgTable, text, serial, timestamp, integer, boolean, jsonb, uuid, varchar, decimal, primaryKey, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 
 // Users table for NextAuth.js authentication
 export const users = pgTable('users', {
@@ -65,6 +66,7 @@ export const cards = pgTable('cards', {
   setName: text('set_name').notNull(),
   collectorNumber: text('collector_number').notNull(),
   imageUris: jsonb('image_uris').$type<Record<string, string>>(),
+  cardFaces: jsonb('card_faces').$type<any[]>(),
   prices: jsonb('prices').$type<Record<string, string>>(),
   legalities: jsonb('legalities').$type<Record<string, string>>(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -104,45 +106,40 @@ export const collections = pgTable('collections', {
   foilIdx: index('collections_foil_idx').on(table.foil),
 }))
 
-// Decks table
+// Decks table - optimized for 1M+ decks
 export const decks = pgTable('decks', {
-  id: serial('id').primaryKey(),
-  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
-  name: text('name').notNull(),
+  id: varchar('id', { length: 12 }).primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull(),
+  name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
-  format: text('format').notNull(), // Standard, Modern, Commander, etc.
-  isPublic: boolean('is_public').default(false).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  format: varchar('format', { length: 50 }).notNull().default('standard'),
+  isPublic: boolean('is_public').notNull().default(false),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 }, (table) => ({
-  // Deck query optimization indexes
   userIdIdx: index('decks_user_id_idx').on(table.userId),
   formatIdx: index('decks_format_idx').on(table.format),
-  isPublicIdx: index('decks_is_public_idx').on(table.isPublic),
-  // Composite index for public deck browsing
-  publicFormatIdx: index('decks_public_format_idx').on(table.isPublic, table.format),
-  // Index for deck name searches
-  nameIdx: index('decks_name_idx').on(table.name),
-  // Time-based indexing for recent decks
+  publicIdx: index('decks_public_idx').on(table.isPublic),
   createdAtIdx: index('decks_created_at_idx').on(table.createdAt),
+  // Performance indexes for 1M+ scale
+  userFormatIdx: index('decks_user_format_idx').on(table.userId, table.format),
+  userCreatedIdx: index('decks_user_created_idx').on(table.userId, table.createdAt),
+  userPublicCreatedIdx: index('decks_user_public_created_idx').on(table.userId, table.isPublic, table.createdAt),
+  publicCreatedIdx: index('decks_public_created_idx').on(table.isPublic, table.createdAt).where(eq(table.isPublic, true)),
 }))
 
-// Deck Cards - tracks cards in decks
+// Deck Cards - tracks cards in decks (optimized for 1M+ decks)
 export const deckCards = pgTable('deck_cards', {
-  id: serial('id').primaryKey(),
-  deckId: integer('deck_id').references(() => decks.id, { onDelete: 'cascade' }).notNull(),
-  cardId: uuid('card_id').references(() => cards.id, { onDelete: 'cascade' }).notNull(),
-  quantity: integer('quantity').default(1).notNull(),
-  category: text('category').default('mainboard').notNull(), // mainboard, sideboard, commander
-  createdAt: timestamp('created_at').defaultNow().notNull(),
+  id: varchar('id', { length: 12 }).primaryKey(),
+  deckId: varchar('deck_id', { length: 12 }).notNull().references(() => decks.id, { onDelete: 'cascade' }),
+  cardId: uuid('card_id').notNull().references(() => cards.id, { onDelete: 'cascade' }),
+  quantity: integer('quantity').notNull().default(1),
+  category: varchar('category', { length: 50 }).notNull().default('mainboard'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
 }, (table) => ({
-  // Deck card relationship indexes
   deckIdIdx: index('deck_cards_deck_id_idx').on(table.deckId),
   cardIdIdx: index('deck_cards_card_id_idx').on(table.cardId),
-  // Composite index for deck composition queries
-  deckCardIdx: index('deck_cards_deck_card_idx').on(table.deckId, table.cardId),
-  // Index for category-based queries (mainboard vs sideboard)
-  categoryIdx: index('deck_cards_category_idx').on(table.category),
+  deckCategoryIdx: index('deck_cards_deck_category_idx').on(table.deckId, table.category),
 }))
 
 // Next Auth tables

@@ -18,6 +18,7 @@ interface DeckCardTextProps {
   onShowVariants?: (cardName: string, cardId: string) => void;
   onShowPreview?: (card: MTGCard) => void;
   activeId: string | null;
+  isViewMode?: boolean;
 }
 
 export function DeckCardText({ 
@@ -29,7 +30,8 @@ export function DeckCardText({
   onQuantityChange,
   onShowVariants,
   onShowPreview,
-  activeId 
+  activeId,
+  isViewMode = false
 }: DeckCardTextProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
@@ -146,10 +148,12 @@ export function DeckCardText({
       onMouseLeave={handleMouseLeave}
     >
       <div
-        {...listeners}
-        className="flex items-center px-3 py-2 bg-black hover:bg-gray-900 border border-gray-800 hover:border-gray-600 rounded cursor-grab active:cursor-grabbing transition-colors"
+        {...(!isViewMode ? listeners : {})}
+        className={`flex items-center justify-between w-full px-3 py-2 bg-black border border-gray-800 hover:border-white rounded transition-colors ${
+          !isViewMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
+        }`}
       >
-        {isHovered ? (
+        {isHovered && !isViewMode ? (
           <div className="flex items-center w-full relative">
             {/* Options Button - Absolute positioned */}
             <div className="absolute left-0 z-10">
@@ -209,17 +213,25 @@ export function DeckCardText({
           </div>
         ) : (
           <>
-            {/* Normal View - Quantity */}
-            <div className="flex-shrink-0 mr-3">
-              <span className="text-gray-400 text-sm font-medium">
-                {quantity}
-              </span>
+            {/* Left Side - Quantity and Card Name */}
+            <div className="flex items-center flex-1 min-w-0">
+              <div className="flex-shrink-0 mr-3">
+                <span className="text-gray-400 text-sm font-medium">
+                  {quantity}
+                </span>
+              </div>
+              
+              <div className="flex-1 min-w-0 overflow-hidden">
+                <span className="text-white text-sm font-medium truncate block">
+                  {card.name}
+                </span>
+              </div>
             </div>
             
-            {/* Normal View - Card Name */}
-            <div className="flex-1 min-w-0 overflow-hidden">
-              <span className="text-white text-sm font-medium truncate block">
-                {card.name}
+            {/* Right Side - Mana Cost */}
+            <div className="flex-shrink-0 ml-3">
+              <span className="text-gray-300 text-sm font-mono">
+                {card.mana_cost || ''}
               </span>
             </div>
           </>

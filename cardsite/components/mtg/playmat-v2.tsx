@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { DndContext, DragOverlay, PointerSensor, MouseSensor, TouchSensor, useSensor, useSensors, DragStartEvent, DragEndEvent, useDroppable } from '@dnd-kit/core';
 import type { MTGCard } from '@/lib/types/mtg';
 import { PlaytestCard } from './playtest-card';
@@ -57,6 +58,7 @@ interface BattlefieldCard extends MTGCard {
     y: number;
   };
   tapped: boolean;
+  zIndex?: number; // Add z-index for layering
 }
 
 // HandCard interface is imported from hand-zone
@@ -95,7 +97,9 @@ const Battlefield: React.FC<{
   onCardMove: (cardId: string, x: number, y: number) => void;
   onCardTap: (cardId: string) => void;
   activeDragId?: string;
-}> = ({ cards, onCardMove, onCardTap, activeDragId }) => {
+  onCardHover?: (card: MTGCard, event: React.MouseEvent) => void;
+  onCardHoverEnd?: () => void;
+}> = ({ cards, onCardMove, onCardTap, activeDragId, onCardHover, onCardHoverEnd }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: 'battlefield',
     data: {
@@ -122,17 +126,31 @@ const Battlefield: React.FC<{
             top: card.position.y
           }}
           isDragging={activeDragId === `battlefield-${card.instanceId}`}
+          zIndex={card.zIndex || 10}
+          onMouseEnter={onCardHover}
+          onMouseLeave={onCardHoverEnd}
         />
       ))}
     </div>
   );
 };
 
-export function PlaymatV2() {
+interface PlaymatV2Props {
+  initialDeck?: MTGCard[];
+}
+
+export function PlaymatV2({ initialDeck = [] }: PlaymatV2Props) {
   const [battlefieldCards, setBattlefieldCards] = useState<BattlefieldCard[]>([]);
   const [handCards, setHandCards] = useState<HandCard[]>([]);
   const [libraryCards, setLibraryCards] = useState<MTGCard[]>([]);
   const [activeDragItem, setActiveDragItem] = useState<any>(null);
+  const [nextZIndex, setNextZIndex] = useState<number>(1); // Track the next available z-index
+  
+  // Hover preview state
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewCard, setPreviewCard] = useState<MTGCard | null>(null);
+  const [previewPosition, setPreviewPosition] = useState({ x: 0, y: 0 });
+  const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
 
   // Set up sensors for drag and drop with proper activation distance
   const sensors = useSensors(
@@ -155,24 +173,36 @@ export function PlaymatV2() {
   );
 
   useEffect(() => {
-    // Initialize with test cards for demo
+    // Initialize with deck cards or test cards for demo
     if (typeof window !== 'undefined') {
-      // Initialize with Lightning Bolt test card centered on battlefield
-      const testCard: BattlefieldCard = {
-        ...testCards[0],
-        instanceId: 'test-card-1',
-        position: { x: window.innerWidth / 2, y: window.innerHeight / 2 }, // Center position
-        tapped: false
-      };
-      setBattlefieldCards([testCard]);
-      console.log('Initialized test card at position:', testCard.position);
+      // Use provided deck or fall back to test cards
+      const cardsToUse = initialDeck.length > 0 ? initialDeck : testCards;
       
-      // Add some cards to hand for testing
-      const initialHand = testCards.slice(0, 3).map((card, index) => ({
-        ...card,
-        instanceId: `hand-${card.id}-${index}`
-      }));
-      setHandCards(initialHand);
+      // Set library cards (shuffle the deck)
+      const shuffledDeck = [...cardsToUse].sort(() => Math.random() - 0.5);
+      
+      // Start with empty hand - no initial cards drawn
+      setHandCards([]);
+      setLibraryCards(shuffledDeck);
+      
+      // If no deck provided, add a test card to battlefield for demo
+      if (initialDeck.length === 0) {
+        const testCard: BattlefieldCard = {
+          ...testCards[0],
+          instanceId: 'test-card-1',
+          position: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
+          tapped: false,
+          zIndex: 1
+        };
+        setBattlefieldCards([testCard]);
+        console.log('Initialized test card at position:', testCard.position);
+      }
+      
+      console.log('Initialized playmat with:', {
+        handSize: 0,
+        librarySize: shuffledDeck.length,
+        totalCards: shuffledDeck.length
+      });
       
       // Add window resize handler to recalculate boundaries
       const handleResize = () => {
@@ -204,7 +234,16 @@ export function PlaymatV2() {
         window.removeEventListener('resize', handleResize);
       };
     }
-  }, []);
+  }, [initialDeck]);
+
+  // Cleanup effect to clear timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimeout) {
+        clearTimeout(hoverTimeout);
+      }
+    };
+  }, [hoverTimeout]);
 
   // Hand management functions
   const drawCard = useCallback(() => {
@@ -221,27 +260,57 @@ export function PlaymatV2() {
     }
   }, [libraryCards]);
 
-  const playCard = useCallback((cardId: string) => {
+  const playCard = useCallback((cardId: string, position?: { x: number; y: number }) => {
     const handCard = handCards.find(card => card.instanceId === cardId);
     if (!handCard) return;
 
     // Remove from hand
     setHandCards(prev => prev.filter(card => card.instanceId !== cardId));
     
-    // Add to battlefield at center position
+    // Use provided position or default to center
+    const dropPosition = position || { 
+      x: (typeof window !== 'undefined' ? window.innerWidth : 1920) / 2,
+      y: (typeof window !== 'undefined' ? window.innerHeight : 1080) / 2
+    };
+    
+    // Add to battlefield at drop position
     const battlefieldCard: BattlefieldCard = {
       ...handCard,
       instanceId: `battlefield-${handCard.instanceId}`,
-      position: { 
-        x: (typeof window !== 'undefined' ? window.innerWidth : 1920) / 2 + Math.random() * 200 - 100, // Some randomness
-        y: (typeof window !== 'undefined' ? window.innerHeight : 1080) / 2 + Math.random() * 200 - 100 
-      },
-      tapped: false
+      position: dropPosition,
+      tapped: false,
+      zIndex: nextZIndex
     };
     
+    // Increment z-index for next card
+    setNextZIndex(prev => prev + 1);
+    
     setBattlefieldCards(prev => [...prev, battlefieldCard]);
-    console.log('Played card:', handCard.name);
-  }, [handCards]);
+    console.log('Played card:', handCard.name, 'at position:', dropPosition);
+  }, [handCards, nextZIndex]);
+
+  const playFromLibrary = useCallback((card: MTGCard, position?: { x: number; y: number }) => {
+    // Use provided position or default to center
+    const dropPosition = position || { 
+      x: (typeof window !== 'undefined' ? window.innerWidth : 1920) / 2,
+      y: (typeof window !== 'undefined' ? window.innerHeight : 1080) / 2
+    };
+    
+    // Add to battlefield at drop position
+    const battlefieldCard: BattlefieldCard = {
+      ...card,
+      instanceId: `battlefield-library-${card.id}-${Date.now()}`,
+      position: dropPosition,
+      tapped: false,
+      zIndex: nextZIndex
+    };
+    
+    // Increment z-index for next card
+    setNextZIndex(prev => prev + 1);
+    
+    setBattlefieldCards(prev => [...prev, battlefieldCard]);
+    console.log('Played card from library:', card.name, 'at position:', dropPosition);
+  }, [nextZIndex]);
 
   const returnToHand = useCallback((cardId: string) => {
     const battlefieldCard = battlefieldCards.find(card => card.instanceId === cardId);
@@ -273,7 +342,28 @@ export function PlaymatV2() {
   const handleDragStart = useCallback((event: DragStartEvent) => {
     console.log('Drag started:', event.active.id);
     setActiveDragItem(event.active);
+    
+    // If dragging from library, immediately remove the card from library
+    if (event.active.id === 'library-deck') {
+      setLibraryCards(prev => prev.slice(1));
+      console.log('Removed card from library during drag start');
+    }
   }, []);
+
+  const handleDragCancel = useCallback(() => {
+    console.log('Drag cancelled');
+    
+    // If library card drag was cancelled, return the card to the library
+    if (activeDragItem?.id === 'library-deck') {
+      const draggedCard = activeDragItem.data.current?.card;
+      if (draggedCard) {
+        setLibraryCards(prev => [draggedCard, ...prev]);
+        console.log('Returned card to library after drag cancel');
+      }
+    }
+    
+    setActiveDragItem(null);
+  }, [activeDragItem]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over, delta } = event;
@@ -284,7 +374,34 @@ export function PlaymatV2() {
       const cardId = active.id.toString().replace('hand-', '');
       
       if (over?.id === 'battlefield') {
-        playCard(cardId);
+        // Calculate drop position based on the drag event
+        const dropPosition = {
+          x: (active.rect.current.translated?.left || 0) + 75, // Add half card width for center
+          y: (active.rect.current.translated?.top || 0) + 104.5 // Add half card height for center
+        };
+        
+        console.log('Dropping card at calculated position:', dropPosition);
+        playCard(cardId, dropPosition);
+      }
+    }
+    
+    // Handle library card drops
+    if (active.id === 'library-deck') {
+      const draggedCard = active.data.current?.card;
+      
+      if (over?.id === 'battlefield' && draggedCard) {
+        // Calculate drop position based on the drag event
+        const dropPosition = {
+          x: (active.rect.current.translated?.left || 0) + 75, // Add half card width for center
+          y: (active.rect.current.translated?.top || 0) + 104.5 // Add half card height for center
+        };
+        
+        console.log('Dropping library card at calculated position:', dropPosition);
+        playFromLibrary(draggedCard, dropPosition);
+      } else if (draggedCard) {
+        // Card was not dropped on battlefield, return it to library
+        setLibraryCards(prev => [draggedCard, ...prev]);
+        console.log('Returned card to library - not dropped on battlefield');
       }
     }
     
@@ -350,15 +467,18 @@ export function PlaymatV2() {
           
           return prev.map(c => 
             c.instanceId === cardId 
-              ? { ...c, position: { x: newX, y: newY } }
+              ? { ...c, position: { x: newX, y: newY }, zIndex: nextZIndex }
               : c
           );
         });
+        
+        // Increment z-index for next operation
+        setNextZIndex(prev => prev + 1);
       }
     }
     
     setActiveDragItem(null);
-  }, [playCard, returnToHand]);
+  }, [playCard, returnToHand, playFromLibrary, nextZIndex]);
 
   const handleCardMove = useCallback((cardId: string, x: number, y: number) => {
     setBattlefieldCards(prev => 
@@ -370,11 +490,60 @@ export function PlaymatV2() {
     );
   }, []);
 
+  // Hover handlers for card preview
+  const handleCardHover = useCallback((card: MTGCard, event: React.MouseEvent) => {
+    if (activeDragItem) return; // Don't show preview while dragging
+    
+    // Clear any existing timeout first
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+      setHoverTimeout(null);
+    }
+    
+    // Clear any existing preview immediately
+    setShowPreview(false);
+    
+    // Get the card element's position
+    const cardElement = event.currentTarget as HTMLElement;
+    const rect = cardElement.getBoundingClientRect();
+    const screenWidth = window.innerWidth;
+    const cardCenterX = rect.left + rect.width / 2;
+    const isOnRightSide = cardCenterX > screenWidth / 2;
+    
+    setPreviewPosition({
+      x: isOnRightSide 
+        ? rect.left - 288 - 16  // Show on left: card left - preview width (288px) - margin
+        : rect.right + 16,      // Show on right: card right + margin
+      y: rect.top
+    });
+    
+    setPreviewCard(card);
+    
+    // Set timeout for preview
+    const previewTimeout = setTimeout(() => {
+      setShowPreview(true);
+    }, 500); // 500ms delay for preview
+    setHoverTimeout(previewTimeout);
+  }, [activeDragItem, hoverTimeout]);
+
+  const handleCardHoverEnd = useCallback(() => {
+    // Clear timeout immediately
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+      setHoverTimeout(null);
+    }
+    
+    // Hide preview immediately
+    setShowPreview(false);
+    setPreviewCard(null);
+  }, [hoverTimeout]);
+
   return (
     <DndContext 
       sensors={sensors}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
     >
       {/* Playmat Container */}
       <div className="fixed inset-0 m-0 p-0 bg-grid-pattern z-[1] overflow-hidden">
@@ -384,6 +553,8 @@ export function PlaymatV2() {
           onCardMove={handleCardMove}
           onCardTap={handleCardTap}
           activeDragId={activeDragItem?.id}
+          onCardHover={handleCardHover}
+          onCardHoverEnd={handleCardHoverEnd}
         />
         
         {/* Deck Zone - positioned in bottom right */}
@@ -391,6 +562,7 @@ export function PlaymatV2() {
           <DeckZone 
             cardsRemaining={libraryCards.length}
             onDeckClick={drawCard}
+            topCard={libraryCards[0]}
           />
         )}
         
@@ -399,6 +571,8 @@ export function PlaymatV2() {
           cards={handCards}
           onCardPlay={playCard}
           onReturnToHand={returnToHand}
+          onCardMouseEnter={handleCardHover}
+          onCardMouseLeave={handleCardHoverEnd}
         />
       </div>
       
@@ -427,7 +601,7 @@ export function PlaymatV2() {
                 const cardId = activeDragItem.id.toString().replace('hand-', '');
                 const card = handCards.find(c => c.instanceId === cardId);
                 return card ? (
-                  <div className="w-[120px] h-[168px] rounded-lg shadow-lg overflow-hidden">
+                  <div className="w-[150px] h-[209px] rounded-lg shadow-lg overflow-hidden">
                     {card.image_uris?.normal ? (
                       <img 
                         src={card.image_uris.normal} 
@@ -444,11 +618,73 @@ export function PlaymatV2() {
                 ) : null;
               }
               
+              // Handle library cards
+              if (activeDragItem.id === 'library-deck') {
+                const topCard = libraryCards[0];
+                return topCard ? (
+                  <div className="w-[150px] h-[209px] rounded-lg shadow-lg overflow-hidden">
+                    {topCard.image_uris?.normal ? (
+                      <img 
+                        src={topCard.image_uris.normal} 
+                        alt={topCard.name} 
+                        className="w-full h-full object-cover"
+                        draggable={false}
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gray-800 flex items-center justify-center text-white text-sm p-2 text-center">
+                        {topCard.name}
+                      </div>
+                    )}
+                  </div>
+                ) : null;
+              }
+              
               return null;
             })()}
           </div>
         ) : null}
       </DragOverlay>
+      
+      {/* Card Preview */}
+      {showPreview && previewCard && typeof window !== 'undefined' && createPortal(
+        <div
+          className="fixed pointer-events-none z-[9999] transition-opacity duration-200"
+          style={{
+            left: `${previewPosition.x}px`,
+            top: `${previewPosition.y}px`,
+            opacity: showPreview ? 1 : 0
+          }}
+        >
+          <div className="relative aspect-[5/7] w-72 rounded-lg overflow-hidden shadow-2xl border-2 border-white">
+            {(() => {
+              const cardFaces = (previewCard as any).card_faces;
+              const isDoubleFaced = cardFaces && cardFaces.length >= 2;
+              const currentFace = isDoubleFaced ? cardFaces[0] : previewCard;
+              const imageUrl = isDoubleFaced 
+                ? currentFace?.image_uris?.normal
+                : previewCard.image_uris?.normal || (previewCard as any).card_faces?.[0]?.image_uris?.normal;
+
+              return imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={currentFace.name || previewCard.name}
+                  className="w-full h-full object-cover rounded-lg"
+                />
+              ) : (
+                <div className="w-72 h-96 bg-gray-800 border border-gray-600 rounded-lg flex flex-col items-center justify-center p-6 text-center">
+                  <p className="text-white text-xl font-medium mb-3">{currentFace.name || previewCard.name}</p>
+                  <p className="text-gray-400 text-lg mb-3">{currentFace.mana_cost || previewCard.mana_cost || ''}</p>
+                  <p className="text-gray-500 text-base">{currentFace.type_line || previewCard.type_line}</p>
+                  {(currentFace.oracle_text || previewCard.oracle_text) && (
+                    <p className="text-gray-300 text-sm mt-4 leading-relaxed">{currentFace.oracle_text || previewCard.oracle_text}</p>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </div>,
+        document.body
+      )}
     </DndContext>
   );
 } 

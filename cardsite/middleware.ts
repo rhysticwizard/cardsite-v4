@@ -111,6 +111,12 @@ export async function middleware(request: NextRequest) {
       return response
     }
     
+    // Skip CSRF for internal card sync requests (server-to-server)
+    if (request.nextUrl.pathname === '/api/cards/sync' && 
+        request.headers.get('x-internal-request') === 'true') {
+      return response
+    }
+    
     // Get session token for CSRF validation
     const token = await getToken({
       req: request,
