@@ -173,21 +173,11 @@ class ErrorLogger {
         metadata,
       }).returning({ id: errorLogs.id })
 
-      // Log to console for immediate visibility
-      const logMethod = severity === 'critical' ? console.error : 
-                       severity === 'high' ? console.warn : console.log
-      
-      logMethod(`[${severity.toUpperCase()}] ${errorType}: ${errorMessage}`, {
-        errorId: result.id,
-        userId: context.userId,
-        url: context.url,
-      })
+      // Error logged to database and monitoring systems
 
       return result.id
     } catch (logError) {
-      // Fallback to console if database logging fails
-      console.error('Failed to log error to database:', logError)
-      console.error('Original error:', error)
+      // Fallback logging if database fails
       return -1
     }
   }

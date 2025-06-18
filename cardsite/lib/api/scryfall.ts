@@ -175,6 +175,45 @@ export async function getCardsFromSet(setCode: string, page = 1): Promise<Scryfa
 }
 
 /**
+ * Get ALL cards from a specific set (handles pagination automatically)
+ */
+export async function getAllCardsFromSet(setCode: string): Promise<ScryfallSearchResponse> {
+  const allCards: MTGCard[] = [];
+  let page = 1;
+  let hasMore = true;
+  let totalCards = 0;
+
+  while (hasMore) {
+    const response = await searchCards({
+      q: `set:${setCode}`,
+      order: 'set',
+      page,
+      unique: 'prints', // Get all printings, not just unique cards
+      include_extras: true, // Include art cards, tokens, etc.
+      include_variations: true, // Include card variations
+    });
+
+    allCards.push(...response.data);
+    hasMore = response.has_more;
+    totalCards = response.total_cards; // Get total from first response
+    page++;
+    
+    // Safety check to prevent infinite loops
+    if (page > 100) {
+      console.warn('Breaking pagination loop at page 100 for safety');
+      break;
+    }
+  }
+
+  return {
+    object: 'list',
+    total_cards: totalCards,
+    has_more: false,
+    data: allCards,
+  };
+}
+
+/**
  * Get all prints/variants of a card by name
  */
 export async function getCardVariants(cardName: string): Promise<ScryfallSearchResponse> {

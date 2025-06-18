@@ -63,7 +63,7 @@ export class CacheManager {
         return null;
       }
     } catch (error) {
-      console.error(`Cache get error for key ${key}:`, error);
+      // Cache get error - fallback to null
       return null;
     }
   }
@@ -83,7 +83,7 @@ export class CacheManager {
         });
       }
     } catch (error) {
-      console.error(`Cache set error for key ${key}:`, error);
+      // Cache set error - continue gracefully
     }
   }
 
@@ -98,7 +98,7 @@ export class CacheManager {
         this.memoryCache.delete(key);
       }
     } catch (error) {
-      console.error(`Cache delete error for key ${key}:`, error);
+      // Cache delete error - continue gracefully
     }
   }
 
@@ -117,7 +117,7 @@ export class CacheManager {
         });
       }
     } catch (error) {
-      console.error(`Cache mget error for keys ${keys.join(', ')}:`, error);
+      // Cache mget error - return nulls
       return keys.map(() => null);
     }
   }
@@ -141,7 +141,7 @@ export class CacheManager {
         });
       }
     } catch (error) {
-      console.error(`Cache mset error:`, error);
+      // Cache mset error - continue gracefully
     }
   }
 
@@ -152,12 +152,12 @@ export class CacheManager {
     try {
       if (this.useVercelKV) {
         // Note: Vercel KV doesn't have flushall, would need to track keys
-        console.warn('Flush not implemented for Vercel KV');
+        // Flush not implemented for Vercel KV
       } else {
         this.memoryCache.clear();
       }
     } catch (error) {
-      console.error(`Cache flush error:`, error);
+      // Cache flush error - continue gracefully
     }
   }
 
@@ -201,7 +201,7 @@ export async function cacheOrFetch<T>(
     
     return freshData;
   } catch (error) {
-    console.error(`Cache-or-fetch error for key ${key}:`, error);
+    // Cache-or-fetch error - rethrow for proper error handling
     throw error;
   }
 }

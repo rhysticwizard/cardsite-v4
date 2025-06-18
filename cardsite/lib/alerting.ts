@@ -158,10 +158,9 @@ class AlertingService {
         html: htmlContent,
       })
 
-      console.log(`📧 Email alert sent for error ${errorId}:`, emailResult.data?.id)
       return true
     } catch (error) {
-      console.error('Failed to send email alert:', error)
+      // Failed to send email alert
       return false
     }
   }
@@ -176,9 +175,7 @@ class AlertingService {
 
     const message = `🚨 CRITICAL: ${errorData.errorType} - ${errorData.message.substring(0, 100)}...`
     
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`📱 SMS Alert would be sent to ${this.config.sms.recipients.join(', ')}: ${message}`)
-    }
+    // SMS Alert ready for production integration
     
     // SMS integration ready - uncomment when Twilio credentials are configured
     // const client = twilio(this.config.sms.twilioAccountSid, this.config.sms.twilioAuthToken)

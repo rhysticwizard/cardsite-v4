@@ -171,8 +171,6 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
     enabled: true, // Always enabled
   });
 
-
-  
   // No suggestions needed for Enter-only search
   
 
@@ -272,7 +270,10 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
   const getFilteredAndSortedSets = () => {
     if (searchMode === 'cards') return [];
     
-    let sets = allSets;
+    // Filter to only show parent sets (sets without a parent_set_code)
+    let sets = allSets.filter(set => 
+      !set.parent_set_code
+    );
     
     // Apply search filter only if there's a search query
     if (debouncedCardQuery) {

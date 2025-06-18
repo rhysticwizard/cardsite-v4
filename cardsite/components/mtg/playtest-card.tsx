@@ -44,8 +44,7 @@ export function PlaytestCard({
     }
   });
 
-  // Debug logging
-  console.log('PlaytestCard render:', { id, transform, isDragging: dndIsDragging, tapped });
+  // Card render state tracking
 
   // Determine if card is being dragged
   const isCurrentlyDragging = isDragging || dndIsDragging;
@@ -62,7 +61,6 @@ export function PlaytestCard({
     // Only trigger tap if we didn't just finish dragging
     event.preventDefault();
     event.stopPropagation();
-    console.log('Card clicked for tap/untap:', id);
     onTap();
   };
 
@@ -100,8 +98,7 @@ export function PlaytestCard({
     return manaCost.replace(/[{}]/g, '');
   };
 
-  // Check if card has power/toughness (creature)
-  const hasPowerToughness = card.power !== undefined && card.toughness !== undefined;
+
 
   // Calculate container transform (drag positioning only)
   const containerTransform = transform ? CSS.Transform.toString(transform) : undefined;
@@ -158,7 +155,7 @@ export function PlaytestCard({
           will-change-transform
           ${tapped ? 'rotate-90' : ''}
           ${isCurrentlyDragging ? 'scale-105 shadow-xl' : 'hover:border-white/50'}
-          ${hasPowerToughness ? 'relative' : ''}
+          relative
         `}
       >
         {/* Card image */}
@@ -181,12 +178,7 @@ export function PlaytestCard({
           </div>
         )}
         
-        {/* Power/Toughness label for creatures */}
-        {hasPowerToughness && (
-          <div className="absolute bottom-1 right-1 bg-black/70 text-white text-xs px-1 py-0.5 rounded font-bold">
-            {card.power}/{card.toughness}
-          </div>
-        )}
+
       </div>
     </div>
   );

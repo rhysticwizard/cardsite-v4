@@ -50,18 +50,7 @@ class SimpleMonitoring {
       this.errors = this.errors.slice(-100);
     }
 
-    // Log to console in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('🔴 Error tracked:', {
-        message,
-        error: error ? {
-          name: error.name,
-          message: error.message,
-          stack: error.stack
-        } : null,
-        context
-      });
-    }
+    // Error tracking ready for production monitoring integration
   }
 
   // Performance tracking
@@ -82,10 +71,7 @@ class SimpleMonitoring {
       this.performance = this.performance.slice(-100);
     }
 
-    // Log slow operations in development
-    if (process.env.NODE_ENV === 'development' && duration > 1000) {
-      console.warn('🐌 Slow operation:', { operation, duration });
-    }
+    // Performance monitoring ready for production integration
   }
 
   // Security event tracking
@@ -106,10 +92,7 @@ class SimpleMonitoring {
       this.security = this.security.slice(-100);
     }
 
-    // Log security events in development
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔒 Security event:', { type, details });
-    }
+    // Security monitoring ready for production integration
   }
 
   // User context

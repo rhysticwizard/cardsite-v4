@@ -56,25 +56,25 @@ export default function LorePage() {
 
   return (
     <>
-      {/* Navigation Tabs */}
-      <div className="border-b border-gray-800 mb-8">
-        <div className="max-w-6xl mx-auto px-6">
-          <nav className="flex space-x-8">
+      {/* Navigation Header */}
+      <div className="max-w-6xl mx-auto px-6 mb-8">
+        <div className="flex items-center justify-center mb-4 pb-4 border-b border-gray-800">
+          <div className="flex items-center space-x-4">
             {navigationTabs.map((tab) => (
               <Button
                 key={tab.id}
                 variant="ghost"
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-0 py-4 border-b-2 transition-colors hover:text-white font-medium ${
+                className={`h-8 rounded-md gap-1.5 px-3 text-sm font-medium border border-transparent hover:border-gray-600 hover:bg-transparent transition-colors ${
                   activeTab === tab.id
-                    ? 'border-white text-white'
-                    : 'border-transparent text-gray-400 hover:border-gray-600'
+                    ? 'text-white border-gray-600'
+                    : 'text-gray-300 hover:text-white'
                 }`}
               >
                 {tab.name}
               </Button>
             ))}
-          </nav>
+          </div>
         </div>
       </div>
 

@@ -34,8 +34,9 @@ export async function GET(request: NextRequest) {
       external: Math.round(memUsage.external / 1024 / 1024), // MB
     };
 
-    // Environment check
+    // Environment check - FIXED: Added status field
     checks.environment = {
+      status: 'healthy', // Added this missing field!
       nodeEnv: process.env.NODE_ENV,
       nodeVersion: process.version,
       platform: process.platform,

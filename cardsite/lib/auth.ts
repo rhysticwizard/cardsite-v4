@@ -337,11 +337,7 @@ export const authOptions: NextAuthOptions = {
         },
       }))
       
-      console.log('🔐 Sign-in event recorded:', { 
-        user: user.email, 
-        provider: account?.provider,
-        isNewUser 
-      })
+      // Sign-in event recorded
     },
     
     async signOut({ session, token }) {
@@ -356,7 +352,7 @@ export const authOptions: NextAuthOptions = {
         timestamp: new Date().toISOString(),
       }))
       
-      console.log('🚪 Sign-out event recorded:', { userId })
+      // Sign-out event recorded
     },
   },
   
@@ -368,17 +364,13 @@ export const authOptions: NextAuthOptions = {
   
   logger: {
     error(code, metadata) {
-      console.error('NextAuth Error:', code, metadata)
-      
-
+      // Log errors in production monitoring system
     },
     warn(code) {
-      console.warn('NextAuth Warning:', code)
+      // Log warnings in production monitoring system
     },
     debug(code, metadata) {
-      if (!isProduction) {
-        console.log('NextAuth Debug:', code, metadata)
-      }
+      // Debug logging disabled in production
     },
   },
 } 

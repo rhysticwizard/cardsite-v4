@@ -87,11 +87,7 @@ export function createSecurityEvent(
  * Logs security events (in production, this would go to a logging service)
  */
 export function logSecurityEvent(event: SecurityEvent): void {
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🛡️ Security Event:', event)
-  }
-  
-  // TODO: In production, send to logging service
+  // In production, send to logging service
   // Examples:
   // - Sentry for error tracking
   // - CloudWatch Logs

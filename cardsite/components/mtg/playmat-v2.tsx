@@ -195,14 +195,7 @@ export function PlaymatV2({ initialDeck = [] }: PlaymatV2Props) {
           zIndex: 1
         };
         setBattlefieldCards([testCard]);
-        console.log('Initialized test card at position:', testCard.position);
       }
-      
-      console.log('Initialized playmat with:', {
-        handSize: 0,
-        librarySize: shuffledDeck.length,
-        totalCards: shuffledDeck.length
-      });
       
       // Add window resize handler to recalculate boundaries
       const handleResize = () => {

@@ -126,10 +126,10 @@ async function revalidateInBackground(
         timestamp: Date.now(),
       }, ttl);
       
-      console.log(`🔄 Background revalidation completed for ${cacheKey}`);
+      // Background revalidation completed
     }
   } catch (error) {
-    console.error('Background revalidation failed:', error);
+      // Background revalidation failed
   }
 }
 
@@ -162,8 +162,7 @@ function generateCacheKey(req: NextRequest, vary: string[] = []): string {
  * Cache invalidation helper for specific API endpoints
  */
 export async function invalidateApiCache(pattern: string): Promise<void> {
-  // Note: This is simplified. In production, you'd want to track cache keys
-  console.log(`⚠️  API cache invalidation for pattern ${pattern} not fully implemented`);
+  // Note: This is simplified. In production, implement proper cache key tracking
 }
 
 /**

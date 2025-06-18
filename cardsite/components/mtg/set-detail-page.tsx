@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getAllSets, getCardsFromSet } from '@/lib/api/scryfall';
+import { getAllSets, getAllCardsFromSet, getCardsFromSet } from '@/lib/api/scryfall';
 import type { MTGSet, MTGCard } from '@/lib/types/mtg';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,6 +17,8 @@ export function SetDetailPage({ setCode }: SetDetailPageProps) {
   const [selectedSubSet, setSelectedSubSet] = useState<string>(setCode);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const [startIndex, setStartIndex] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const carouselRef = React.useRef<HTMLDivElement>(null);
 
   // Get all sets to find related sets
@@ -61,12 +63,15 @@ export function SetDetailPage({ setCode }: SetDetailPageProps) {
     });
   }, [allSets, currentSet]);
 
-  // Get cards from the selected subset
-  const { data: cardsData, isLoading: cardsLoading } = useQuery({
-    queryKey: ['set-cards', selectedSubSet],
-    queryFn: () => getCardsFromSet(selectedSubSet),
+  // Get ALL cards from the selected subset
+  const { data: cardsData, isLoading: cardsLoading, error } = useQuery({
+    queryKey: ['set-cards-all', selectedSubSet],
+    queryFn: () => getAllCardsFromSet(selectedSubSet),
     enabled: !!selectedSubSet,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
   });
+
+
 
   // Get the selected subset info
   const selectedSetInfo = useMemo(() => {
@@ -75,45 +80,28 @@ export function SetDetailPage({ setCode }: SetDetailPageProps) {
 
   // Carousel scroll functions
   const updateScrollButtons = () => {
-    // Always enable buttons if there are multiple sets
-    if (relatedSets.length > 1) {
-      setCanScrollLeft(true);
-      setCanScrollRight(true);
-    } else {
-      setCanScrollLeft(false);
-      setCanScrollRight(false);
-    }
+    setCanScrollLeft(startIndex > 0);
+    setCanScrollRight(startIndex + 5 < relatedSets.length);
   };
 
   const scrollLeft = () => {
-    if (carouselRef.current) {
-      carouselRef.current.scrollBy({ left: -200, behavior: 'smooth' });
-    }
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    setStartIndex(prev => Math.max(0, prev - 5));
+    setTimeout(() => setIsTransitioning(false), 300);
   };
 
   const scrollRight = () => {
-    if (carouselRef.current) {
-      carouselRef.current.scrollBy({ left: 200, behavior: 'smooth' });
-    }
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    setStartIndex(prev => Math.min(relatedSets.length - 5, prev + 5));
+    setTimeout(() => setIsTransitioning(false), 300);
   };
 
-  // Update scroll buttons when related sets change
+  // Update scroll buttons when related sets or start index change
   React.useEffect(() => {
-    // Use a small delay to ensure DOM is fully rendered
-    const timer = setTimeout(() => {
     updateScrollButtons();
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [relatedSets]);
-
-  // Update scroll buttons on scroll
-  React.useEffect(() => {
-    const carousel = carouselRef.current;
-    if (carousel) {
-      carousel.addEventListener('scroll', updateScrollButtons);
-      return () => carousel.removeEventListener('scroll', updateScrollButtons);
-    }
-  }, []);
+  }, [relatedSets, startIndex]);
 
   if (!currentSet) {
     return (
@@ -154,9 +142,9 @@ export function SetDetailPage({ setCode }: SetDetailPageProps) {
               {/* Left Arrow */}
               <button
                 onClick={scrollLeft}
-                disabled={!canScrollLeft}
-                className={`absolute left-0 top-1/2 transform -translate-y-1/2 z-10 bg-gray-800 hover:bg-gray-700 rounded-full p-2 transition-all ${
-                  !canScrollLeft ? 'opacity-50 cursor-not-allowed' : 'opacity-90 hover:opacity-100'
+                disabled={!canScrollLeft || isTransitioning}
+                className={`absolute left-0 top-1/2 transform -translate-y-1/2 z-10 rounded-full p-2 transition-all ${
+                  (!canScrollLeft || isTransitioning) ? 'opacity-50 cursor-not-allowed' : 'opacity-90 hover:opacity-100'
                 }`}
               >
                 <ChevronLeft className="w-5 h-5 text-white" />
@@ -165,63 +153,69 @@ export function SetDetailPage({ setCode }: SetDetailPageProps) {
               {/* Right Arrow */}
               <button
                 onClick={scrollRight}
-                disabled={!canScrollRight}
-                className={`absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-gray-800 hover:bg-gray-700 rounded-full p-2 transition-all ${
-                  !canScrollRight ? 'opacity-50 cursor-not-allowed' : 'opacity-90 hover:opacity-100'
+                disabled={!canScrollRight || isTransitioning}
+                className={`absolute right-0 top-1/2 transform -translate-y-1/2 z-10 rounded-full p-2 transition-all ${
+                  (!canScrollRight || isTransitioning) ? 'opacity-50 cursor-not-allowed' : 'opacity-90 hover:opacity-100'
                 }`}
               >
                 <ChevronRight className="w-5 h-5 text-white" />
               </button>
 
               {/* Carousel Container */}
-              <div 
-                ref={carouselRef}
-                className="flex items-center space-x-4 overflow-x-auto scrollbar-hide px-12"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-              >
-                {relatedSets.map((set) => {
-                const isSelected = set.code.toLowerCase() === selectedSubSet.toLowerCase();
-                
-                return (
-                  <button
-                    key={set.id}
-                    onClick={() => setSelectedSubSet(set.code)}
-                    className={`flex-shrink-0 text-center space-y-2 p-4 rounded-lg transition-all ${
-                      isSelected 
-                        ? 'bg-gray-800 border-2 border-blue-500' 
-                        : 'bg-black border-2 border-gray-700 hover:border-gray-600'
-                    }`}
+              <div className="relative flex items-center justify-center">
+                <div className="overflow-hidden w-full py-1 px-0" style={{ width: `${5 * 144 + 4 * 16}px`, height: '140px' }}>
+                  <div 
+                    className="flex gap-4 transition-transform duration-300 ease-in-out h-full"
+                    style={{
+                      transform: `translateX(-${startIndex * (144 + 16)}px)`,
+                      width: `${relatedSets.length * (144 + 16)}px`
+                    }}
                   >
-                    {/* Set Icon */}
-                    <div className="flex justify-center">
-                      <div className="w-16 h-16 bg-black rounded-full flex items-center justify-center">
-                        {set.icon_svg_uri ? (
-                          <img 
-                            src={set.icon_svg_uri} 
-                            alt={set.name}
-                            className="w-12 h-12 invert"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 bg-gray-600 rounded-lg flex items-center justify-center">
-                            <span className="text-white font-bold text-lg">
-                              {set.code.substring(0, 2).toUpperCase()}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    {relatedSets.map((set) => {
+                    const isSelected = set.code.toLowerCase() === selectedSubSet.toLowerCase();
                     
-                    {/* Set Name */}
-                    <div className="min-w-0 max-w-32">
-                      <h3 className={`font-semibold text-sm truncate ${
-                        isSelected ? 'text-blue-400' : 'text-white'
-                      }`}>
-                        {set.name}
-                      </h3>
-                    </div>
-                  </button>
-                );
-                })}
+                    return (
+                      <button
+                        key={set.id}
+                        onClick={() => setSelectedSubSet(set.code)}
+                        className={`flex-shrink-0 text-center space-y-2 p-4 rounded-lg transition-all w-36 h-28 ${
+                          isSelected 
+                            ? 'bg-gray-800' 
+                            : 'bg-black hover:bg-gray-900'
+                        }`}
+                      >
+                        {/* Set Icon */}
+                        <div className="flex justify-center">
+                          <div className="w-16 h-16 bg-black rounded-full flex items-center justify-center">
+                            {set.icon_svg_uri ? (
+                              <img 
+                                src={set.icon_svg_uri} 
+                                alt={set.name}
+                                className="w-12 h-12 invert"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 bg-gray-600 rounded-lg flex items-center justify-center">
+                                <span className="text-white font-bold text-lg">
+                                  {set.code.substring(0, 2).toUpperCase()}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Set Name */}
+                        <div className="min-w-0 max-w-32">
+                          <h3 className={`font-semibold text-sm text-center leading-tight ${
+                            isSelected ? 'text-blue-400' : 'text-white'
+                          }`}>
+                            {set.name}
+                          </h3>
+                        </div>
+                      </button>
+                    );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -245,14 +239,27 @@ export function SetDetailPage({ setCode }: SetDetailPageProps) {
         {cardsLoading && (
           <div className="text-center py-12">
             <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-            <p>Loading cards...</p>
+            <p>Loading all cards...</p>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="text-center py-12">
+            <p className="text-red-400 text-lg">
+              Error loading cards: {error.message}
+            </p>
           </div>
         )}
 
         {/* Cards Grid */}
         {cardsData && cardsData.data.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {cardsData.data.map((card: MTGCard) => (
+          <>
+            <div className="mb-4 text-gray-400">
+              Showing {cardsData.data.length} of {cardsData.total_cards} cards
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {cardsData.data.map((card: MTGCard) => (
               <Link key={card.id} href={`/card/${card.id}`}>
                 <Card 
                   className="bg-black border-black cursor-pointer overflow-hidden"
@@ -281,7 +288,8 @@ export function SetDetailPage({ setCode }: SetDetailPageProps) {
                 </Card>
               </Link>
             ))}
-          </div>
+            </div>
+          </>
         )}
 
         {/* No Cards */}
@@ -293,14 +301,7 @@ export function SetDetailPage({ setCode }: SetDetailPageProps) {
           </div>
         )}
 
-        {/* Load More Button (if there are more cards) */}
-        {cardsData && cardsData.has_more && (
-          <div className="text-center mt-8">
-            <Button variant="outline" className="bg-gray-800 border-gray-600 text-gray-300 hover:text-white">
-              Load More Cards
-            </Button>
-          </div>
-        )}
+
       </div>
     </div>
   );

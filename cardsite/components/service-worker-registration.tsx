@@ -16,43 +16,30 @@ export function ServiceWorkerRegistration() {
 
   const registerServiceWorker = async () => {
     try {
-      console.log('🔧 Registering service worker for Phase 3B...');
-      
       const registration = await navigator.serviceWorker.register('/sw.js', {
         scope: '/',
         updateViaCache: 'none'
       });
 
-      console.log('✅ Service Worker registered successfully:', registration.scope);
-
       // Listen for updates
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
         if (newWorker) {
-          console.log('🔄 New service worker installing...');
-          
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('🆕 New service worker installed, reload to activate');
               // Optionally show a notification to the user about the update
             }
           });
         }
       });
 
-      // Check if there's a waiting service worker
-      if (registration.waiting) {
-        console.log('⏳ Service worker waiting to activate');
-      }
-
       // Listen for controlling service worker changes
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('🔄 Service worker controller changed');
         // Optionally reload the page to ensure consistency
       });
 
     } catch (error) {
-      console.error('❌ Service worker registration failed:', error);
+      // Service worker registration failed
     }
   };
 
@@ -100,11 +87,8 @@ export function ServiceWorkerRegistration() {
           for (const registration of registrations) {
             await registration.unregister();
           }
-          console.log('🗑️ All service workers unregistered');
         }
       };
-      
-      console.log('🛠️ Service Worker utilities available at window.swUtils');
     }
   }, []);
 

@@ -4,10 +4,11 @@ import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Calendar, User, Trash2 } from 'lucide-react';
+import { Plus, Calendar, User, Trash2, Edit, Info, Play } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { secureApiRequest } from '@/lib/csrf';
 
 interface Deck {
@@ -55,6 +56,7 @@ async function deleteDeck(deckId: string): Promise<void> {
 export function UserDecksDisplay() {
   const { data: session, status } = useSession();
   const queryClient = useQueryClient();
+  const router = useRouter();
   
   const { data: decksData, isLoading, error, refetch } = useQuery({
     queryKey: ['user-decks'],
@@ -74,6 +76,12 @@ export function UserDecksDisplay() {
       alert('Failed to delete deck. Please try again.');
     },
   });
+
+  const handleDeleteDeck = (deckId: string, deckName: string) => {
+    if (confirm(`Are you sure you want to delete "${deckName}"? This action cannot be undone.`)) {
+      deleteMutation.mutate(deckId);
+    }
+  };
 
   // Show loading state
   if (status === 'loading' || isLoading) {
@@ -156,41 +164,88 @@ export function UserDecksDisplay() {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
       {decks.map((deck) => (
         <div key={deck.id} className="relative group">
-          <Link href={`/decks/${deck.id}`}>
-            <Card className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-all duration-200 cursor-pointer group p-0 overflow-hidden">
+          <Card className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-all duration-200 cursor-pointer group p-0 overflow-hidden relative">
+            {/* Card Image */}
               {deck.thumbnailImage?.art_crop ? (
                 <Image 
                   src={deck.thumbnailImage.art_crop} 
                   alt={deck.thumbnailCardName || deck.name}
                   width={280}
                   height={200}
-                  className="aspect-[7/5] w-full object-cover"
+                className="aspect-[4/3] w-full object-cover"
+                unoptimized
                 />
               ) : (
-                <div className="aspect-[7/5] bg-gradient-to-br from-gray-800 to-gray-900"></div>
-              )}
-            </Card>
-          </Link>
-          
-          {/* Delete button - appears on hover */}
-          <Button
-            size="sm"
-            variant="destructive"
-            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 h-8 w-8 p-0"
+              <div className="aspect-[4/3] bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-400 mb-1">{deck.name.charAt(0)}</div>
+                  <div className="text-xs text-gray-500">{deck.format}</div>
+                </div>
+              </div>
+            )}
+            
+            {/* Top gradient overlay on hover with action buttons - matches deckbuilder cards */}
+            <div className="absolute top-0 left-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20">
+              <div className="bg-gradient-to-b from-black via-black/80 to-transparent rounded-t-lg h-12 flex items-center justify-evenly px-2 py-2">
+                {/* Info button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    router.push(`/decks/${deck.id}`);
+                  }}
+                  className="w-6 h-6 p-0 hover:bg-gray-700 text-white hover:text-white rounded flex items-center justify-center transition-colors"
+                  title="View Deck"
+                >
+                  <Info className="w-4 h-4" />
+                </button>
+
+                {/* Edit button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    router.push(`/decks/${deck.id}/edit`);
+                  }}
+                  className="w-6 h-6 p-0 hover:bg-gray-700 text-white hover:text-white rounded flex items-center justify-center transition-colors"
+                  title="Edit Deck"
+                >
+                  <Edit className="w-4 h-4" />
+                </button>
+                
+                {/* Playtest button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    router.push(`/playmatv2?deckId=${deck.id}`);
+                  }}
+                  className="w-6 h-6 p-0 hover:bg-gray-700 text-white hover:text-white rounded flex items-center justify-center transition-colors"
+                  title="Playtest"
+                >
+                  <Play className="w-4 h-4" />
+                </button>
+                
+                {/* Delete button */}
+                <button
             onClick={(e) => {
-              e.preventDefault();
               e.stopPropagation();
-              if (confirm(`Are you sure you want to delete "${deck.name}"? This action cannot be undone.`)) {
-                deleteMutation.mutate(deck.id);
-              }
+                    handleDeleteDeck(deck.id, deck.name);
             }}
-            disabled={deleteMutation.isPending}
+                  className="w-6 h-6 p-0 hover:bg-red-600 text-white hover:text-white rounded flex items-center justify-center transition-colors"
+                  title="Delete Deck"
           >
             <Trash2 className="w-4 h-4" />
-          </Button>
+                </button>
+              </div>
+            </div>
+            
+            {/* Deck Info Overlay */}
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+              <h3 className="text-white font-semibold text-sm truncate">{deck.name}</h3>
+              <p className="text-gray-300 text-xs">{deck.cardCount} cards • {deck.format}</p>
+            </div>
+          </Card>
         </div>
       ))}
       
