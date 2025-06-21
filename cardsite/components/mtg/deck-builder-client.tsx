@@ -11,6 +11,7 @@ import {
   useSensors,
   pointerWithin,
   DragOverlay,
+  useDraggable,
 } from '@dnd-kit/core';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { searchCards, getCardVariants, getRandomCard } from '@/lib/api/scryfall';
@@ -23,6 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Textarea } from '@/components/ui/textarea';
 import { CardSearchResults } from './card-search-results';
 import { DeckColumn } from './deck-column';
+import { PlusButtonDropZone } from './plus-button-drop-zone';
 import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -55,6 +57,8 @@ const CARD_CATEGORIES = {
   sideboard: 'Sideboard'
 } as const;
 
+
+
 interface DeckBuilderClientProps {
   isViewMode?: boolean;
   deckId?: string;
@@ -69,9 +73,10 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
   const [searchQuery, setSearchQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [columnChildren, setColumnChildren] = useState<Record<string, string[]>>({});
   const [customColumns, setCustomColumns] = useState<Record<string, string>>({});
+  const [columnPositions, setColumnPositions] = useState<Record<string, { row: number; col: number }>>({});
   const [deletedBaseColumns, setDeletedBaseColumns] = useState<Set<string>>(new Set());
+  const [columnOptions, setColumnOptions] = useState<Record<string, string>>({});
   const [showingVariantsFor, setShowingVariantsFor] = useState<{cardName: string, cardId: string} | null>(null);
   const [previousSearchState, setPreviousSearchState] = useState<{
     input: string;
@@ -192,8 +197,16 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
       // Restore column structure if available
       if (savedColumnStructure) {
         setCustomColumns(savedColumnStructure.customColumns || {});
-        setColumnChildren(savedColumnStructure.columnChildren || {});
+        setColumnPositions(savedColumnStructure.columnPositions || {});
         setDeletedBaseColumns(new Set(savedColumnStructure.deletedBaseColumns || []));
+        setColumnOptions(savedColumnStructure.columnOptions || {});
+      } else {
+        // Initialize default positions for base columns (row 0)
+        const defaultPositions: Record<string, { row: number; col: number }> = {};
+        baseColumns.forEach((key, index) => {
+          defaultPositions[key] = { row: 0, col: index };
+        });
+        setColumnPositions(defaultPositions);
       }
       
               // Load cards by category
@@ -303,6 +316,7 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
         setDeckDescription(draft.description);
         setDeckFormat(draft.format);
         setCustomColumns(draft.customColumns);
+        setColumnOptions(draft.columnOptions || {});
         
         // Convert draft cards back to deck format
         const newDeckState: any = {
@@ -503,6 +517,7 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
         format: deckFormat,
         cards: draftCards,
         customColumns: customColumns,
+      columnOptions: columnOptions,
       };
 
       // Only auto-save, don't update the currentDraft state to prevent infinite loop
@@ -517,11 +532,63 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
     }
   }, [isDraftMode, deck, deckDescription, deckFormat, customColumns]);
 
-  // Calculate total card count
+  // Calculate total card count (excluding sideboard and extra deck)
   const totalCards = (Object.keys(deck) as Array<keyof DeckState>).reduce((total, key) => {
+    if (key === 'name' || key === 'sideboard') return total; // Exclude sideboard from main deck count
+    const category = deck[key] as DeckCardData[];
+    
+    // Exclude cards with column options that don't count toward main deck
+    const mainDeckCards = category.filter(card => {
+      const columnOption = columnOptions[card.category];
+      return columnOption !== 'Sideboard' && columnOption !== 'Starts in Extra';
+    });
+    
+    return total + mainDeckCards.reduce((sum, card) => sum + card.quantity, 0);
+  }, 0);
+  
+  // Calculate sideboard count separately
+  const sideboardCards = (Object.keys(deck) as Array<keyof DeckState>).reduce((total, key) => {
     if (key === 'name') return total;
     const category = deck[key] as DeckCardData[];
-    return total + category.reduce((sum, card) => sum + card.quantity, 0);
+    
+    // Count cards with sideboard column option
+    const sideboardColumnCards = category.filter(card => {
+      const columnOption = columnOptions[card.category];
+      return columnOption === 'Sideboard';
+    });
+    
+    return total + sideboardColumnCards.reduce((sum, card) => sum + card.quantity, 0);
+  }, 0) + deck.sideboard.reduce((sum, card) => sum + card.quantity, 0);
+  
+  // Calculate extra deck count separately
+  const extraDeckCards = (Object.keys(deck) as Array<keyof DeckState>).reduce((total, key) => {
+    if (key === 'name') return total;
+    const category = deck[key] as DeckCardData[];
+    
+    // Count cards with extra deck column option
+    const extraColumnCards = category.filter(card => {
+      const columnOption = columnOptions[card.category];
+      return columnOption === 'Starts in Extra';
+    });
+    
+    return total + extraColumnCards.reduce((sum, card) => sum + card.quantity, 0);
+  }, 0);
+
+  // Calculate total deck price (excluding sideboard cards)
+  const totalDeckPrice = (Object.keys(deck) as Array<keyof DeckState>).reduce((total, key) => {
+    if (key === 'name') return total;
+    const category = deck[key] as DeckCardData[];
+    
+    // Exclude cards with sideboard column option from price calculation
+    const mainDeckCards = category.filter(card => {
+      const columnOption = columnOptions[card.category];
+      return columnOption !== 'Sideboard';
+    });
+    
+    return total + mainDeckCards.reduce((sum, card) => {
+      const cardPrice = parseFloat(card.card.prices?.usd || '0');
+      return sum + (cardPrice * card.quantity);
+    }, 0);
   }, 0);
 
   // Determine card category based on type line
@@ -639,6 +706,14 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
     });
   }, []);
 
+  // Handle column option changes
+  const handleColumnOptionChange = useCallback((columnId: string, option: string) => {
+    setColumnOptions(prev => ({
+      ...prev,
+      [columnId]: option
+    }));
+  }, []);
+
   // Show variants in search area
   const showCardVariants = useCallback((cardName: string, cardId: string) => {
     // Store current search state before showing variants
@@ -701,8 +776,8 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
 
   // Drag handlers
   const handleDragStart = (event: DragStartEvent) => {
-    console.log('Drag start:', event.active.id);
-    setActiveId(event.active.id as string);
+    const activeId = event.active.id as string;
+    setActiveId(activeId);
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -721,7 +796,6 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    console.log('Drag end:', { activeId: active.id, overId: over?.id });
     setActiveId(null);
 
     const activeId = active.id as string;
@@ -729,6 +803,49 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
     // If we're showing variants, ignore drag and drop - variants should only be clicked
     if (showingVariantsFor) {
       return;
+    }
+
+    // Handle column drag and drop
+    if (activeId.startsWith('column-')) {
+      const activeColumnId = activeId.replace('column-', '');
+      
+      // Handle drop on plus button
+      if (over && (over.id as string).startsWith('plus-')) {
+        const [, col, row] = (over.id as string).split('-');
+        const targetCol = parseInt(col);
+        const targetRow = parseInt(row);
+        
+
+        
+        // Move the column to the new position
+        setColumnPositions(prev => ({
+          ...prev,
+          [activeColumnId]: { row: targetRow, col: targetCol }
+        }));
+        return;
+      }
+      
+      // Handle drop on another column (swap)
+      if (over && (over.id as string).startsWith('column-')) {
+        const overColumnId = (over.id as string).replace('column-', '');
+        
+        if (activeColumnId === overColumnId) return;
+        
+        // Swap column positions
+        const activePos = columnPositions[activeColumnId];
+        const overPos = columnPositions[overColumnId];
+        
+        if (activePos && overPos) {
+
+          
+          setColumnPositions(prev => ({
+            ...prev,
+            [activeColumnId]: overPos,
+            [overColumnId]: activePos
+          }));
+        }
+        return;
+      }
     }
 
     // If dropped outside any drop zone (over is null), handle card removal
@@ -741,7 +858,6 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
         });
         
         if (sourceCategory) {
-          console.log('Card dropped in empty area, removing from deck:', activeId);
           removeCardFromDeck(activeId, sourceCategory as keyof Omit<DeckState, 'name'>);
         }
       }
@@ -761,7 +877,6 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
         });
         
         if (sourceCategory) {
-          console.log('Card dropped on invalid drop zone, removing from deck:', activeId);
           removeCardFromDeck(activeId, sourceCategory as keyof Omit<DeckState, 'name'>);
         }
       }
@@ -774,8 +889,6 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
       const card = searchResults?.data.find(c => c.id === cardId);
       
       if (card) {
-        console.log('Adding card to deck:', { cardId, category: overId });
-        
         // Normal card addition (variants are handled by click only)
         // For built-in categories, use the typed function
         if (overId in CARD_CATEGORIES) {
@@ -809,7 +922,6 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
       const sourceCard = deck[sourceCategory as keyof Omit<DeckState, 'name'>].find(c => c.id === activeId);
       
       if (sourceCard) {
-        console.log('Moving card between categories:', { from: sourceCategory, to: targetCategory });
         // Remove from source
         removeCardFromDeck(activeId, sourceCategory as keyof Omit<DeckState, 'name'>);
         
@@ -886,8 +998,9 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
     // Create enhanced description with custom column structure
     const columnStructure = {
       customColumns,
-      columnChildren,
+      columnPositions,
       deletedBaseColumns: Array.from(deletedBaseColumns),
+      columnOptions,
     };
 
     const enhancedDescription = JSON.stringify({
@@ -906,21 +1019,26 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
     saveDeckMutation.mutate(deckData);
   }, [session, router, deck, deckDescription, deckFormat, saveDeckMutation, queryClient, isDraftMode]);
 
-  // Add new column
-  const addNewColumn = useCallback((afterColumnKey: string) => {
+  // Add new column at specific grid position
+  const addNewColumnAt = useCallback((row: number, col: number) => {
     const newColumnKey = `custom_${Date.now()}`;
-    const newColumnLabel = `Custom ${Object.keys(customColumns).length + 1}`;
+    const newColumnLabel = `Column`;
     
     setCustomColumns(prev => ({
       ...prev,
       [newColumnKey]: newColumnLabel
     }));
     
+    setColumnPositions(prev => ({
+      ...prev,
+      [newColumnKey]: { row, col }
+    }));
+    
     setDeck(prev => ({
       ...prev,
       [newColumnKey]: [] as any
     }));
-  }, [customColumns]);
+  }, []);
 
   // Rename column
   const renameColumn = useCallback((columnId: string, newTitle: string) => {
@@ -957,33 +1075,27 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
       });
     }
 
-    // Remove from column children relationships
-    setColumnChildren(prev => {
-      const newColumnChildren = { ...prev };
-      
-      // Remove the column from any parent's children array
-      Object.keys(newColumnChildren).forEach(parentKey => {
-        newColumnChildren[parentKey] = newColumnChildren[parentKey].filter(childKey => childKey !== columnId);
-        // Clean up empty arrays
-        if (newColumnChildren[parentKey].length === 0) {
-          delete newColumnChildren[parentKey];
-        }
-      });
-      
-      // Remove the column as a parent (if it had children)
-      delete newColumnChildren[columnId];
-      
-      return newColumnChildren;
+    // Remove from column positions
+    setColumnPositions(prev => {
+      const newPositions = { ...prev };
+      delete newPositions[columnId];
+      return newPositions;
     });
   }, [baseColumns]);
 
-  // Restore deleted base column
-  const restoreBaseColumn = useCallback((columnId: string) => {
+  // Restore deleted base column at specified position
+  const restoreBaseColumn = useCallback((columnId: string, row: number = 0, col: number = 0) => {
     setDeletedBaseColumns(prev => {
       const newSet = new Set(prev);
       newSet.delete(columnId);
       return newSet;
     });
+    
+    // Set position for restored base column
+    setColumnPositions(prev => ({
+      ...prev,
+      [columnId]: { row, col }
+    }));
   }, []);
 
   // Parse and import deck text
@@ -1809,7 +1921,7 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
                     onClick={!isViewMode ? handleStartEditingDeckName : undefined}
                     title={!isViewMode ? "Click to edit deck name" : undefined}
                   >
-                  {deck.name} · {totalCards} cards
+                  {deck.name} · {totalCards} cards{sideboardCards > 0 ? ` · ${sideboardCards} sideboard` : ''}{extraDeckCards > 0 ? ` · ${extraDeckCards} extra` : ''} · {totalDeckPrice > 0 ? `$${totalDeckPrice.toFixed(2)}` : '$0.00'}
                 </h1>
                 )}
               </div>
@@ -1916,101 +2028,54 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
             <hr className="border-gray-600 mt-4" />
           </div>
 
-                      {/* Deck Columns */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-                              {baseColumns.map((key) => {
-                // If this base column is deleted, show just a small plus button (only in edit mode)
-                if (deletedBaseColumns.has(key)) {
-                  return !isViewMode ? (
-                    <div key={key} className="flex flex-col space-y-4">
-                      <button
-                        type="button"
-                        onClick={() => restoreBaseColumn(key)}
-                        className="relative mt-2 w-8 h-8 mx-auto flex items-center justify-center bg-black hover:bg-gray-900 border border-black rounded-full text-gray-400 hover:text-white transition-colors cursor-pointer z-10"
-                        style={{ pointerEvents: 'auto' }}
-                        title={`Add ${CARD_CATEGORIES[key as keyof typeof CARD_CATEGORIES]}`}
-                      >
-                        <svg className="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                      </button>
-                    </div>
-                  ) : null;
+                      {/* Deck Columns - Independent Column Positions */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-start">
+              {(() => {
+                // Build independent column stacks for each of the 6 positions
+                const maxCol = 5; // 6 columns (0-5)
+                
+                // Group columns by column position
+                const columnStacks: Record<number, string[]> = {};
+                
+                // Initialize empty stacks
+                for (let col = 0; col <= maxCol; col++) {
+                  columnStacks[col] = [];
                 }
                 
-                // Normal column rendering
-                return (
-                  <div key={key} className="flex flex-col space-y-4">
-                    {/* Main Column */}
-                    <div className="flex flex-col">
-                      <DeckColumn
-                        id={key}
-                        title={customColumns[key] || CARD_CATEGORIES[key as keyof typeof CARD_CATEGORIES]}
-                        cards={deck[key as keyof Omit<DeckState, 'name'>] || []}
-                        onCardRemove={removeCardFromDeck}
-                        onQuantityChange={updateCardQuantity}
-                      onCardChange={changeCardFace}
-                      onShowVariants={showCardVariants}
-                      onShowPreview={handleCardPreview}
-                        onColumnDelete={deleteColumn}
-                        onColumnRename={renameColumn}
-                        activeId={activeId}
-                        viewMode={viewMode}
-                        isViewMode={isViewMode}
-                      />
-                      {/* Plus button to add column below this one - only show if no children */}
-                      {!isViewMode && (!columnChildren[key] || columnChildren[key].length === 0) && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            console.log('Plus button clicked for column:', key);
+                // Populate stacks with columns
+                const allColumns = [
+                  ...baseColumns.filter(key => !deletedBaseColumns.has(key)),
+                  ...Object.keys(customColumns)
+                ];
+                
+                allColumns.forEach(columnKey => {
+                  const position = columnPositions[columnKey];
+                  if (position && position.col >= 0 && position.col <= maxCol) {
+                    if (!columnStacks[position.col]) columnStacks[position.col] = [];
+                    columnStacks[position.col].push(columnKey);
+                  }
+                });
+                
+                // Sort columns in each stack by row
+                Object.keys(columnStacks).forEach(colKey => {
+                  const col = parseInt(colKey);
+                  columnStacks[col].sort((a, b) => {
+                    const posA = columnPositions[a];
+                    const posB = columnPositions[b];
+                    return (posA?.row || 0) - (posB?.row || 0);
+                  });
+                });
                             
-                            // Create new column directly below the clicked column
-                            const newColumnKey = `custom_${Date.now()}`;
-                            const newColumnLabel = `Column`;
-                            
-                            console.log('Creating new column:', newColumnKey, newColumnLabel);
-                            
-                            // Add to custom columns
-                            setCustomColumns(prev => ({
-                              ...prev,
-                              [newColumnKey]: newColumnLabel
-                            }));
-                            
-                            // Add as child of the clicked column
-                            setColumnChildren(prev => ({
-                              ...prev,
-                              [key]: [...(prev[key] || []), newColumnKey]
-                            }));
-                            
-                            // Add to deck state
-                            setDeck(prev => ({
-                              ...prev,
-                              [newColumnKey]: [] as any
-                            }));
-                          }}
-                          className="relative mt-2 w-8 h-8 mx-auto flex items-center justify-center bg-black hover:bg-gray-900 border border-black rounded-full text-gray-400 hover:text-white transition-colors cursor-pointer z-10"
-                          style={{ pointerEvents: 'auto' }}
-                          title={`Add column below ${CARD_CATEGORIES[key as keyof typeof CARD_CATEGORIES]}`}
-                        >
-                          <svg className="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                    
-                    {/* Child Columns (vertically below) */}
-                    {columnChildren[key]?.map((childKey, index) => {
-                      const isLastChild = index === columnChildren[key].length - 1;
-                      return (
-                        <div key={childKey} className="flex flex-col">
+                // Render each column position as an independent stack
+                return Array.from({ length: maxCol + 1 }, (_, colIndex) => (
+                  <div key={colIndex} className="flex flex-col space-y-4">
+                    {/* Render all columns in this column position */}
+                    {columnStacks[colIndex].map(columnKey => (
+                      <div key={columnKey} className="flex flex-col">
                           <DeckColumn
-                            id={childKey}
-                            title={customColumns[childKey]}
-                            cards={deck[childKey as keyof Omit<DeckState, 'name'>] || []}
+                          id={columnKey}
+                          title={customColumns[columnKey] || CARD_CATEGORIES[columnKey as keyof typeof CARD_CATEGORIES] || 'Column'}
+                          cards={deck[columnKey as keyof Omit<DeckState, 'name'>] || []}
                             onCardRemove={removeCardFromDeck}
                             onQuantityChange={updateCardQuantity}
                           onCardChange={changeCardFace}
@@ -2018,57 +2083,52 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
                           onShowPreview={handleCardPreview}
                             onColumnDelete={deleteColumn}
                             onColumnRename={renameColumn}
+                            onColumnOptionChange={handleColumnOptionChange}
+                          columnOption={columnOptions[columnKey] || 'Starts in Deck'}
                             activeId={activeId}
                             viewMode={viewMode}
                             isViewMode={isViewMode}
                           />
-                          {/* Plus button only on the last child in the stack */}
-                          {!isViewMode && isLastChild && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                
-                                const newColumnKey = `custom_${Date.now()}`;
-                                const newColumnLabel = `Column`;
-                                
-                                setCustomColumns(prev => ({
-                                  ...prev,
-                                  [newColumnKey]: newColumnLabel
-                                }));
-                                
-                                setColumnChildren(prev => ({
-                                  ...prev,
-                                  [key]: [...(prev[key] || []), newColumnKey]
-                                }));
-                                
-                                setDeck(prev => ({
-                                  ...prev,
-                                  [newColumnKey]: [] as any
-                                }));
-                              }}
-                              className="relative mt-2 w-8 h-8 mx-auto flex items-center justify-center bg-black hover:bg-gray-900 border border-black rounded-full text-gray-400 hover:text-white transition-colors cursor-pointer z-10"
-                              style={{ pointerEvents: 'auto' }}
-                              title={`Add column below ${customColumns[childKey]}`}
-                            >
-                              <svg className="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                              </svg>
-                            </button>
-                          )}
+                      </div>
+                    ))}
+                    
+                    {/* Plus button at the bottom of each column stack */}
+                    {!isViewMode && (
+                      <PlusButtonDropZone 
+                        key={`plus-${colIndex}`}
+                        colIndex={colIndex}
+                        nextRow={columnStacks[colIndex].length > 0 ? 
+                          Math.max(...columnStacks[colIndex].map(key => columnPositions[key]?.row || 0)) + 1 : 0}
+                        onAddColumn={addNewColumnAt}
+                        activeId={activeId}
+                      />
+                    )}
                         </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
+                ));
+              })()}
             </div>
         </div>
 
         {/* Drag Overlay */}
         <DragOverlay dropAnimation={null}>
           {activeId && (() => {
+            // Column drag overlay
+            if (activeId.startsWith('column-')) {
+              const columnId = activeId.replace('column-', '');
+              const columnTitle = customColumns[columnId] || CARD_CATEGORIES[columnId as keyof typeof CARD_CATEGORIES] || 'Column';
+              return (
+                <div className="w-[220px] bg-black/80 border-2 border-blue-500 rounded-lg shadow-2xl opacity-90">
+                  <div className="px-4 py-2 text-sm font-medium text-white bg-blue-900/80 rounded-t-lg border-b border-gray-600">
+                    {columnTitle}
+                  </div>
+                  <div className="h-16 bg-black/80 rounded-b-lg flex items-center justify-center text-gray-400 text-sm">
+                    Dragging column...
+                  </div>
+                </div>
+              );
+            }
+            
+            // Card drag overlay
             const card = searchResults?.data.find(c => c.id === activeId.replace('search-', '')) ||
                         Object.values(deck).flat().find(c => Array.isArray(c) ? false : c.id === activeId)?.card;
             
@@ -2078,7 +2138,7 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
                            (card as any).card_faces?.[0]?.image_uris?.normal;
             
             return (
-              <div className="relative w-48 aspect-[5/7] rounded-lg overflow-hidden shadow-2xl ring-2 ring-white">
+              <div className="relative w-48 aspect-[5/7] rounded-lg overflow-hidden shadow-2xl ring-2 ring-white opacity-90">
                 {imageUrl ? (
                   <Image
                     src={imageUrl}
@@ -2087,7 +2147,7 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
                     className="object-cover rounded-lg"
                   />
                 ) : (
-                  <div className="w-full h-full bg-gray-800 border border-gray-600 rounded-lg flex flex-col items-center justify-center p-2 text-center">
+                  <div className="w-full h-full bg-gray-800/80 border border-gray-600 rounded-lg flex flex-col items-center justify-center p-2 text-center">
                     <p className="text-white text-xs font-medium mb-1 line-clamp-2">{card.name}</p>
                     <p className="text-gray-400 text-xs">{card.mana_cost || ''}</p>
                   </div>

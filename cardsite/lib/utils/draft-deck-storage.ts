@@ -17,6 +17,7 @@ export interface DraftDeck {
   isPublic: boolean;
   cards: DraftCard[];
   customColumns: Record<string, string>;
+  columnOptions?: Record<string, string>;
   lastModified: number;
   created: number;
 }

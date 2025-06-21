@@ -9,6 +9,7 @@ interface PlaytestCardProps {
   card: MTGCard;
   style?: CSSProperties;
   tapped: boolean;
+  facedown?: boolean;
   onTap: () => void;
   id: string;
   isDragging?: boolean;
@@ -21,6 +22,7 @@ export function PlaytestCard({
   card,
   style = {},
   tapped,
+  facedown = false,
   onTap,
   id,
   isDragging = false,
@@ -133,8 +135,8 @@ export function PlaytestCard({
       {...attributes}
       {...listeners}
       onClick={handleClick}
-      onMouseEnter={(e) => onMouseEnter?.(card, e)}
-      onMouseLeave={onMouseLeave}
+      onMouseEnter={(e) => !facedown && onMouseEnter?.(card, e)}
+      onMouseLeave={!facedown ? onMouseLeave : undefined}
       tabIndex={0}
       role="button"
       aria-label={`${card.name}${tapped ? ' (tapped)' : ''} - Click to ${tapped ? 'untap' : 'tap'}`}
@@ -158,24 +160,42 @@ export function PlaytestCard({
           relative
         `}
       >
-        {/* Card image */}
-        <img
-          src={getCardImageUrl(card)}
-          alt={card.name}
-          className="w-full h-full object-cover"
-          draggable={false}
-          onError={(e) => {
-            // Fallback to card back on error
-            const target = e.target as HTMLImageElement;
-            target.src = 'https://cards.scryfall.io/normal/back/0/0/0aeebaf5-8c7d-4636-9e82-8c27447861f7.jpg';
-          }}
-        />
-        
-        {/* Mana cost overlay */}
-        {card.mana_cost && (
-          <div className="absolute top-1 right-1 bg-black/70 text-white text-xs px-1 py-0.5 rounded">
-            {formatManaCost(card.mana_cost)}
-          </div>
+        {/* Card content - show back if facedown, otherwise show normal card */}
+        {facedown ? (
+          /* Official Magic card back */
+          <img
+            src="https://cards.scryfall.io/large/back/0/0/0aeebaf5-8c7d-4636-9e82-8c27447861f7.jpg?1582037402"
+            alt="Magic: The Gathering card back"
+            className="w-full h-full object-cover"
+            draggable={false}
+            onError={(e) => {
+              // Fallback to a different card back URL if this one fails
+              const target = e.target as HTMLImageElement;
+              target.src = 'https://gatherer.wizards.com/Handlers/Image.ashx?type=card&name=Card+Back';
+            }}
+          />
+        ) : (
+          <>
+            {/* Card image */}
+            <img
+              src={getCardImageUrl(card)}
+              alt={card.name}
+              className="w-full h-full object-cover"
+              draggable={false}
+              onError={(e) => {
+                // Fallback to card back on error
+                const target = e.target as HTMLImageElement;
+                target.src = 'https://cards.scryfall.io/normal/back/0/0/0aeebaf5-8c7d-4636-9e82-8c27447861f7.jpg';
+              }}
+            />
+            
+            {/* Mana cost overlay */}
+            {card.mana_cost && (
+              <div className="absolute top-1 right-1 bg-black/70 text-white text-xs px-1 py-0.5 rounded">
+                {formatManaCost(card.mana_cost)}
+              </div>
+            )}
+          </>
         )}
         
 

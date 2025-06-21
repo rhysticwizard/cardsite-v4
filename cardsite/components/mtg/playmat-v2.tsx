@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { DndContext, DragOverlay, PointerSensor, MouseSensor, TouchSensor, useSensor, useSensors, DragStartEvent, DragEndEvent, useDroppable } from '@dnd-kit/core';
+import { DndContext, DragOverlay, PointerSensor, MouseSensor, TouchSensor, useSensor, useSensors, DragStartEvent, DragEndEvent, useDroppable, useDraggable } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 import type { MTGCard } from '@/lib/types/mtg';
 import { PlaytestCard } from './playtest-card';
 import { HandZone, type HandCard } from './hand-zone';
@@ -58,6 +59,7 @@ interface BattlefieldCard extends MTGCard {
     y: number;
   };
   tapped: boolean;
+  facedown?: boolean; // Add facedown state
   zIndex?: number; // Add z-index for layering
 }
 
@@ -91,6 +93,108 @@ const calculateBoundaries = (cardDimensions: { width: number; height: number }) 
   };
 };
 
+// Draggable top card component for extra deck
+function DraggableExtraTopCard({ card }: { card: MTGCard }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: 'extra-deck',
+    data: {
+      type: 'extra-card',
+      card
+    }
+  });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    opacity: isDragging ? 0 : 1,
+    width: '150px',
+    height: '209px',
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    zIndex: 10
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      className="absolute inset-0 cursor-grab active:cursor-grabbing"
+      style={style}
+      {...listeners}
+      {...attributes}
+    >
+      {/* Invisible overlay for dragging */}
+      <div className="w-full h-full" />
+    </div>
+  );
+}
+
+// Extra Deck Zone Component
+const ExtraDeckZone: React.FC<{
+  cardsRemaining: number;
+  onDeckClick: () => void;
+  topCard?: MTGCard;
+}> = ({ cardsRemaining, onDeckClick, topCard }) => {
+  return (
+    <div className="fixed bottom-4 left-4 z-[10]">
+      <button
+        onClick={onDeckClick}
+        className="
+          rounded-lg shadow-lg
+          hover:scale-105
+          active:scale-95
+          transition-all duration-200
+          cursor-pointer
+          flex flex-col items-center justify-center
+          text-white text-sm font-bold
+          relative
+          overflow-hidden
+          border-2 border-purple-400/50
+          hover:border-purple-400/70
+        "
+        style={{
+          width: '150px',
+          height: '209px'
+        }}
+        disabled={cardsRemaining === 0}
+        aria-label={`Extra deck with ${cardsRemaining} cards remaining - Click to draw`}
+      >
+        {/* Magic card back */}
+        <img
+          src="https://cards.scryfall.io/large/back/0/0/0aeebaf5-8c7d-4636-9e82-8c27447861f7.jpg?1582037402"
+          alt="Magic: The Gathering card back"
+          className="absolute inset-0 w-full h-full object-cover rounded-lg"
+          draggable={false}
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.src = 'https://gatherer.wizards.com/Handlers/Image.ashx?type=card&name=Card+Back';
+          }}
+        />
+        
+        {/* Purple overlay to distinguish from library */}
+        <div className="absolute inset-0 bg-purple-900/60 rounded-lg" />
+        
+        {/* Content */}
+        <div className="relative z-10 text-center">
+          <div className="text-sm mb-2 text-shadow">EXTRA</div>
+          <div className="text-2xl font-bold text-shadow">{cardsRemaining}</div>
+        </div>
+        
+        {/* Disabled overlay */}
+        {cardsRemaining === 0 && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
+            <span className="text-red-400 text-xs font-bold">EMPTY</span>
+          </div>
+        )}
+        
+        {/* Draggable top card overlay - only when cards are available */}
+        {cardsRemaining > 0 && topCard && (
+          <DraggableExtraTopCard card={topCard} />
+        )}
+      </button>
+    </div>
+  );
+};
+
 // Battlefield Component
 const Battlefield: React.FC<{ 
   cards: BattlefieldCard[];
@@ -120,6 +224,7 @@ const Battlefield: React.FC<{
           id={card.instanceId}
           card={card}
           tapped={card.tapped}
+          facedown={card.facedown}
           onTap={() => onCardTap(card.instanceId)}
           style={{
             left: card.position.x,
@@ -137,12 +242,16 @@ const Battlefield: React.FC<{
 
 interface PlaymatV2Props {
   initialDeck?: MTGCard[];
+  initialHandCards?: MTGCard[];
+  initialBattlefieldCards?: MTGCard[];
+  initialExtraDeckCards?: MTGCard[];
 }
 
-export function PlaymatV2({ initialDeck = [] }: PlaymatV2Props) {
+export function PlaymatV2({ initialDeck = [], initialHandCards = [], initialBattlefieldCards = [], initialExtraDeckCards = [] }: PlaymatV2Props) {
   const [battlefieldCards, setBattlefieldCards] = useState<BattlefieldCard[]>([]);
   const [handCards, setHandCards] = useState<HandCard[]>([]);
   const [libraryCards, setLibraryCards] = useState<MTGCard[]>([]);
+  const [extraDeckCards, setExtraDeckCards] = useState<MTGCard[]>([]);
   const [activeDragItem, setActiveDragItem] = useState<any>(null);
   const [nextZIndex, setNextZIndex] = useState<number>(1); // Track the next available z-index
   
@@ -181,9 +290,32 @@ export function PlaymatV2({ initialDeck = [] }: PlaymatV2Props) {
       // Set library cards (shuffle the deck)
       const shuffledDeck = [...cardsToUse].sort(() => Math.random() - 0.5);
       
-      // Start with empty hand - no initial cards drawn
-      setHandCards([]);
+      // Initialize hand with cards that should start in hand
+      const initialHand: HandCard[] = initialHandCards.map((card, index) => ({
+        ...card,
+        instanceId: `initial-hand-${card.id}-${index}-${Date.now()}`
+      }));
+      
+      // Initialize battlefield with cards that should start in play
+      const initialBattlefield: BattlefieldCard[] = initialBattlefieldCards.map((card, index) => ({
+        ...card,
+        instanceId: `initial-battlefield-${card.id}-${index}-${Date.now()}`,
+        position: {
+          // Spread cards out on the battlefield in a grid pattern
+          x: (window.innerWidth / 2) + ((index % 4) - 1.5) * 200, // Grid columns
+          y: (window.innerHeight / 2) + Math.floor(index / 4) * 250  // Grid rows
+        },
+        tapped: false,
+        facedown: (card as any).facedown || false, // Preserve facedown state from initial cards
+        zIndex: index + 1
+      }));
+      
+      setHandCards(initialHand);
       setLibraryCards(shuffledDeck);
+      setBattlefieldCards(initialBattlefield);
+      setExtraDeckCards(initialExtraDeckCards);
+      
+      console.log(`Playmat initialized: ${shuffledDeck.length} library cards, ${initialHand.length} starting hand cards, ${initialBattlefield.length} starting battlefield cards, ${initialExtraDeckCards.length} extra deck cards`);
       
       // If no deck provided, add a test card to battlefield for demo
       if (initialDeck.length === 0) {
@@ -227,7 +359,7 @@ export function PlaymatV2({ initialDeck = [] }: PlaymatV2Props) {
         window.removeEventListener('resize', handleResize);
       };
     }
-  }, [initialDeck]);
+  }, [initialDeck, initialHandCards, initialBattlefieldCards, initialExtraDeckCards]);
 
   // Cleanup effect to clear timeouts on unmount
   useEffect(() => {
@@ -252,6 +384,20 @@ export function PlaymatV2({ initialDeck = [] }: PlaymatV2Props) {
       console.log('Drew card:', newHandCard.name);
     }
   }, [libraryCards]);
+
+  const drawFromExtra = useCallback(() => {
+    if (extraDeckCards.length > 0) {
+      const drawnCard = extraDeckCards[0];
+      const newHandCard: HandCard = {
+        ...drawnCard,
+        instanceId: `hand-${drawnCard.id}-${Date.now()}`
+      };
+      
+      setHandCards(prev => [...prev, newHandCard]);
+      setExtraDeckCards(prev => prev.slice(1));
+      console.log('Drew card from extra deck:', newHandCard.name);
+    }
+  }, [extraDeckCards]);
 
   const playCard = useCallback((cardId: string, position?: { x: number; y: number }) => {
     const handCard = handCards.find(card => card.instanceId === cardId);
@@ -336,12 +482,26 @@ export function PlaymatV2({ initialDeck = [] }: PlaymatV2Props) {
     console.log('Drag started:', event.active.id);
     setActiveDragItem(event.active);
     
+    // Clear hover preview immediately when drag starts
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+      setHoverTimeout(null);
+    }
+    setShowPreview(false);
+    setPreviewCard(null);
+    
     // If dragging from library, immediately remove the card from library
     if (event.active.id === 'library-deck') {
       setLibraryCards(prev => prev.slice(1));
       console.log('Removed card from library during drag start');
     }
-  }, []);
+    
+    // If dragging from extra deck, immediately remove the card from extra deck
+    if (event.active.id === 'extra-deck') {
+      setExtraDeckCards(prev => prev.slice(1));
+      console.log('Removed card from extra deck during drag start');
+    }
+  }, [hoverTimeout]);
 
   const handleDragCancel = useCallback(() => {
     console.log('Drag cancelled');
@@ -355,12 +515,25 @@ export function PlaymatV2({ initialDeck = [] }: PlaymatV2Props) {
       }
     }
     
+    // If extra deck card drag was cancelled, return the card to the extra deck
+    if (activeDragItem?.id === 'extra-deck') {
+      const draggedCard = activeDragItem.data.current?.card;
+      if (draggedCard) {
+        setExtraDeckCards(prev => [draggedCard, ...prev]);
+        console.log('Returned card to extra deck after drag cancel');
+      }
+    }
+    
+    // Clear drag state and allow hover previews to work again
     setActiveDragItem(null);
   }, [activeDragItem]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over, delta } = event;
     console.log('Drag ended:', { activeId: active.id, overId: over?.id, delta });
+    
+    // After drag ends, clear drag state and allow hover previews to work again
+    setActiveDragItem(null);
     
     // Handle hand card drops
     if (active.id.toString().startsWith('hand-')) {
@@ -395,6 +568,26 @@ export function PlaymatV2({ initialDeck = [] }: PlaymatV2Props) {
         // Card was not dropped on battlefield, return it to library
         setLibraryCards(prev => [draggedCard, ...prev]);
         console.log('Returned card to library - not dropped on battlefield');
+      }
+    }
+    
+    // Handle extra deck card drops
+    if (active.id === 'extra-deck') {
+      const draggedCard = active.data.current?.card;
+      
+      if (over?.id === 'battlefield' && draggedCard) {
+        // Calculate drop position based on the drag event
+        const dropPosition = {
+          x: (active.rect.current.translated?.left || 0) + 75, // Add half card width for center
+          y: (active.rect.current.translated?.top || 0) + 104.5 // Add half card height for center
+        };
+        
+        console.log('Dropping extra deck card at calculated position:', dropPosition);
+        playFromLibrary(draggedCard, dropPosition);
+      } else if (draggedCard) {
+        // Card was not dropped on battlefield, return it to extra deck
+        setExtraDeckCards(prev => [draggedCard, ...prev]);
+        console.log('Returned card to extra deck - not dropped on battlefield');
       }
     }
     
@@ -559,6 +752,15 @@ export function PlaymatV2({ initialDeck = [] }: PlaymatV2Props) {
           />
         )}
         
+        {/* Extra Deck Zone - positioned in bottom left */}
+        {extraDeckCards.length > 0 && (
+          <ExtraDeckZone 
+            cardsRemaining={extraDeckCards.length}
+            onDeckClick={drawFromExtra}
+            topCard={extraDeckCards[0]}
+          />
+        )}
+        
         {/* Hand Zone */}
         <HandZone 
           cards={handCards}
@@ -583,6 +785,7 @@ export function PlaymatV2({ initialDeck = [] }: PlaymatV2Props) {
                     id={card.instanceId}
                     card={card}
                     tapped={card.tapped}
+                    facedown={card.facedown}
                     onTap={() => {}}
                     isDragging={true}
                   />
@@ -614,6 +817,27 @@ export function PlaymatV2({ initialDeck = [] }: PlaymatV2Props) {
               // Handle library cards
               if (activeDragItem.id === 'library-deck') {
                 const topCard = libraryCards[0];
+                return topCard ? (
+                  <div className="w-[150px] h-[209px] rounded-lg shadow-lg overflow-hidden">
+                    {topCard.image_uris?.normal ? (
+                      <img 
+                        src={topCard.image_uris.normal} 
+                        alt={topCard.name} 
+                        className="w-full h-full object-cover"
+                        draggable={false}
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gray-800 flex items-center justify-center text-white text-sm p-2 text-center">
+                        {topCard.name}
+                      </div>
+                    )}
+                  </div>
+                ) : null;
+              }
+              
+              // Handle extra deck cards
+              if (activeDragItem.id === 'extra-deck') {
+                const topCard = extraDeckCards[0];
                 return topCard ? (
                   <div className="w-[150px] h-[209px] rounded-lg shadow-lg overflow-hidden">
                     {topCard.image_uris?.normal ? (

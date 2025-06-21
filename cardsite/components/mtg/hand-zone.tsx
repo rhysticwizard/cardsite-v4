@@ -342,12 +342,7 @@ export function HandZone({
         </div>
       )}
       
-      {/* Left indicator for hidden cards */}
-      {needsCarousel && carouselOffset > 0 && (
-        <div className="absolute left-2 bottom-16 bg-black/80 text-white text-xs px-2 py-1 rounded pointer-events-auto z-30">
-          +{carouselOffset} more
-        </div>
-      )}
+
       
       {/* Hand cards */}
       {cardPositions.map((cardData, index) => {

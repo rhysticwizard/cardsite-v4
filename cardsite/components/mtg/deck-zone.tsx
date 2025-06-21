@@ -51,11 +51,8 @@ export function DeckZone({ cardsRemaining, onDeckClick, topCard }: DeckZoneProps
       <button
         onClick={onDeckClick}
         className="
-          bg-gradient-to-br from-blue-900 to-blue-800
-          border-2 border-blue-600
           rounded-lg shadow-lg
-          hover:from-blue-800 hover:to-blue-700
-          hover:border-blue-500
+          hover:scale-105
           active:scale-95
           transition-all duration-200
           cursor-pointer
@@ -63,6 +60,8 @@ export function DeckZone({ cardsRemaining, onDeckClick, topCard }: DeckZoneProps
           text-white text-sm font-bold
           relative
           overflow-hidden
+          border-2 border-white/30
+          hover:border-white/50
         "
         style={{
           width: '150px',
@@ -71,14 +70,25 @@ export function DeckZone({ cardsRemaining, onDeckClick, topCard }: DeckZoneProps
         disabled={cardsRemaining === 0}
         aria-label={`Library with ${cardsRemaining} cards remaining - Click to draw`}
       >
-        {/* Card back pattern */}
-        <div className="absolute inset-1 bg-gradient-to-br from-blue-800 to-blue-900 rounded border border-blue-500 opacity-50" />
-        <div className="absolute inset-2 bg-gradient-to-br from-blue-700 to-blue-800 rounded border border-blue-400 opacity-30" />
+        {/* Magic card back */}
+        <img
+          src="https://cards.scryfall.io/large/back/0/0/0aeebaf5-8c7d-4636-9e82-8c27447861f7.jpg?1582037402"
+          alt="Magic: The Gathering card back"
+          className="absolute inset-0 w-full h-full object-cover rounded-lg"
+          draggable={false}
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.src = 'https://gatherer.wizards.com/Handlers/Image.ashx?type=card&name=Card+Back';
+          }}
+        />
+        
+        {/* Dark overlay for better text visibility */}
+        <div className="absolute inset-0 bg-black/40 rounded-lg" />
         
         {/* Content */}
         <div className="relative z-10 text-center">
-          <div className="text-sm mb-2">LIBRARY</div>
-          <div className="text-2xl font-bold">{cardsRemaining}</div>
+          <div className="text-sm mb-2 text-shadow">LIBRARY</div>
+          <div className="text-2xl font-bold text-shadow">{cardsRemaining}</div>
         </div>
         
         {/* Disabled overlay */}
