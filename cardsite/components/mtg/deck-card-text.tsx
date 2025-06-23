@@ -19,6 +19,10 @@ interface DeckCardTextProps {
   onShowPreview?: (card: MTGCard) => void;
   activeId: string | null;
   isViewMode?: boolean;
+  isSelected?: boolean;
+  onCardClick?: (cardId: string, event: React.MouseEvent) => void;
+  activeHoverCard?: string | null;
+  onHoverChange?: (cardId: string | null) => void;
 }
 
 export function DeckCardText({ 
@@ -31,7 +35,11 @@ export function DeckCardText({
   onShowVariants,
   onShowPreview,
   activeId,
-  isViewMode = false
+  isViewMode = false,
+  isSelected = false,
+  onCardClick,
+  activeHoverCard,
+  onHoverChange
 }: DeckCardTextProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
@@ -83,6 +91,11 @@ export function DeckCardText({
   const handleMouseEnter = () => {
     setIsHovered(true);
     
+    // Only allow one hover preview at a time
+    if (onHoverChange) {
+      onHoverChange(id);
+    }
+    
     // Clear any existing timeout first
     if (hoverTimeout) {
       clearTimeout(hoverTimeout);
@@ -107,6 +120,7 @@ export function DeckCardText({
     }
     
     const previewTimeout = setTimeout(() => {
+      // Always show preview after timeout, the global state should be updated by now
       setShowPreview(true);
     }, 500); // 500ms delay for preview
     setHoverTimeout(previewTimeout);
@@ -124,7 +138,23 @@ export function DeckCardText({
     
     // Hide preview immediately
     setShowPreview(false);
+    
+    // Clear global hover state if this card was active
+    if (onHoverChange && activeHoverCard === id) {
+      onHoverChange(null);
+    }
   };
+
+  // Effect to handle when another card becomes the active hover card
+  useEffect(() => {
+    if (activeHoverCard !== id && showPreview) {
+      setShowPreview(false);
+      if (hoverTimeout) {
+        clearTimeout(hoverTimeout);
+        setHoverTimeout(null);
+      }
+    }
+  }, [activeHoverCard, id, showPreview, hoverTimeout]);
 
   // Cleanup effect to clear timeouts on unmount
   useEffect(() => {
@@ -143,7 +173,7 @@ export function DeckCardText({
       }}
       style={style}
       {...attributes}
-      className={`${isDragging ? 'opacity-50' : ''} relative group`}
+      className={`${isDragging || (isSelected && activeId && activeId !== id) ? 'opacity-0' : ''} relative group`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -151,7 +181,16 @@ export function DeckCardText({
         {...(!isViewMode ? listeners : {})}
         className={`flex items-center justify-between w-full px-3 py-2 bg-black border border-gray-800 hover:border-white rounded transition-colors ${
           !isViewMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
+        } ${
+          isSelected ? 'border-blue-500 border-2 shadow-lg shadow-blue-500/50' : ''
         }`}
+        data-card-id={id}
+        onClick={(e) => {
+          if (onCardClick) {
+            e.stopPropagation();
+            onCardClick(id, e);
+          }
+        }}
       >
         {isHovered && !isViewMode ? (
           <div className="flex items-center w-full relative">
@@ -222,7 +261,7 @@ export function DeckCardText({
               </div>
               
               <div className="flex-1 min-w-0 overflow-hidden">
-                <span className="text-white text-sm font-medium truncate block">
+                <span className="text-white text-sm font-medium truncate block select-none">
                   {card.name}
                 </span>
               </div>
@@ -230,7 +269,7 @@ export function DeckCardText({
             
             {/* Right Side - Mana Cost */}
             <div className="flex-shrink-0 ml-3">
-              <span className="text-gray-300 text-sm font-mono">
+              <span className="text-gray-300 text-sm font-mono select-none">
                 {card.mana_cost || ''}
               </span>
             </div>

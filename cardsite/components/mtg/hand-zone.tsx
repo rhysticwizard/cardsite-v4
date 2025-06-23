@@ -118,12 +118,11 @@ export function HandZone({
   onCardMouseLeave,
   onReturnToHand
 }: HandZoneProps) {
-  // State to track the currently hovered card and carousel offset
+  const [carouselOffset, setCarouselOffset] = useState(0);
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
-  const [carouselOffset, setCarouselOffset] = useState<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
   
-  // Setup the hand zone as a droppable area
+  // Droppable setup
   const { setNodeRef: setDroppableRef, isOver } = useDroppable({
     id: 'hand-zone',
     data: {
@@ -137,16 +136,12 @@ export function HandZone({
     setDroppableRef(element);
   };
   
-  console.log("HandZone rendered with", cards.length, "cards");
-  
-  // Set up measurement of container size
+  // Only log when cards actually change, not on every render
+  const prevCardsLength = useRef(cards.length);
   useEffect(() => {
-    console.log("Container ref set:", containerRef.current ? "yes" : "no");
-    if (containerRef.current) {
-      console.log("Container dimensions:", 
-                 containerRef.current.clientWidth, 
-                 "x", 
-                 containerRef.current.clientHeight);
+    if (prevCardsLength.current !== cards.length) {
+      console.log("HandZone cards changed:", prevCardsLength.current, "->", cards.length);
+      prevCardsLength.current = cards.length;
     }
   }, [cards.length]);
   
@@ -201,8 +196,6 @@ export function HandZone({
     const visibleCardCount = visibleCards.length;
     if (visibleCardCount === 0) return [];
     
-    console.log("Calculating positions for", visibleCardCount, "visible cards out of", cards.length, "total cards");
-    
     // Card dimensions - match battlefield card size
     const cardWidth = 150;
     const cardHeight = 209; // 5:7 aspect ratio - same as battlefield cards
@@ -211,8 +204,6 @@ export function HandZone({
     // Get container dimensions
     const containerWidth = containerRef.current?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1920);
     const containerHeight = containerRef.current?.clientHeight || 160;
-    
-    console.log("Using container dimensions:", containerWidth, "x", containerHeight);
     
     // Calculate available width, accounting for margins
     const availableWidth = containerWidth - 80; // 40px margin on each side
@@ -247,8 +238,6 @@ export function HandZone({
     
     // Start x position to center the entire hand (center of first card)
     const startX = (containerWidth - totalWidth) / 2;
-    
-    console.log("Start X position:", startX, "Total width:", totalWidth, "Available width:", availableWidth, "Spacing:", baseSpacing);
     
     // Calculate positions for each visible card
     return visibleCards.map((card, index) => {

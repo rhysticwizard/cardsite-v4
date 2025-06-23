@@ -23,9 +23,13 @@ interface DeckCardProps {
   isTopCard?: boolean;
   activeId: string | null;
   isViewMode?: boolean;
+  isSelected?: boolean;
+  onCardClick?: (cardId: string, event: React.MouseEvent) => void;
+  activeHoverCard?: string | null;
+  onHoverChange?: (cardId: string | null) => void;
 }
 
-export function DeckCard({ id, card, quantity, category, onRemove, onQuantityChange, onCardChange, onShowVariants, onShowPreview, isTopCard = true, activeId, isViewMode = false }: DeckCardProps) {
+export function DeckCard({ id, card, quantity, category, onRemove, onQuantityChange, onCardChange, onShowVariants, onShowPreview, isTopCard = true, activeId, isViewMode = false, isSelected = false, onCardClick, activeHoverCard, onHoverChange }: DeckCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editQuantity, setEditQuantity] = useState(quantity.toString());
   const [showPreview, setShowPreview] = useState(false);
@@ -79,6 +83,11 @@ export function DeckCard({ id, card, quantity, category, onRemove, onQuantityCha
   };
 
   const handleMouseEnter = () => {
+    // Only allow one hover preview at a time
+    if (onHoverChange) {
+      onHoverChange(id);
+    }
+    
     if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect();
       const screenWidth = window.innerWidth;
@@ -94,6 +103,7 @@ export function DeckCard({ id, card, quantity, category, onRemove, onQuantityCha
     }
     
     const previewTimeout = setTimeout(() => {
+      // Always show preview after timeout, the global state should be updated by now
       setShowPreview(true);
     }, 500); // 500ms delay for preview
     setHoverTimeout(previewTimeout);
@@ -113,7 +123,23 @@ export function DeckCard({ id, card, quantity, category, onRemove, onQuantityCha
     }
     setShowPreview(false);
     setShowControls(false);
+    
+    // Clear global hover state if this card was active
+    if (onHoverChange && activeHoverCard === id) {
+      onHoverChange(null);
+    }
   };
+
+  // Effect to handle when another card becomes the active hover card
+  useEffect(() => {
+    if (activeHoverCard !== id && showPreview) {
+      setShowPreview(false);
+      if (hoverTimeout) {
+        clearTimeout(hoverTimeout);
+        setHoverTimeout(null);
+      }
+    }
+  }, [activeHoverCard, id, showPreview, hoverTimeout]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -175,13 +201,22 @@ export function DeckCard({ id, card, quantity, category, onRemove, onQuantityCha
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className={`${isDragging ? 'opacity-0' : ''} relative`}
+      className={`${isDragging || (isSelected && activeId && activeId !== id) ? 'opacity-0' : ''} relative`}
     >
       <div 
         ref={cardRef}
-        className="relative group hover:ring-2 hover:ring-white rounded-lg transition-all duration-200"
+        className={`relative group hover:ring-2 hover:ring-white rounded-lg transition-all duration-200 ${
+          isSelected ? 'ring-2 ring-blue-500 ring-opacity-75 shadow-lg shadow-blue-500/50' : ''
+        }`}
+        data-card-id={id}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
+        onClick={(e) => {
+          if (onCardClick) {
+            e.stopPropagation();
+            onCardClick(id, e);
+          }
+        }}
       >
         {/* Card */}
         <div
@@ -203,9 +238,9 @@ export function DeckCard({ id, card, quantity, category, onRemove, onQuantityCha
             />
           ) : (
             <div className="absolute inset-0 bg-gray-800 border border-gray-600 rounded-lg flex flex-col items-center justify-center p-2 text-center">
-              <p className="text-white text-xs font-medium mb-1 line-clamp-2">{currentFace.name || card.name}</p>
-              <p className="text-gray-400 text-xs">{currentFace.mana_cost || card.mana_cost || ''}</p>
-              <p className="text-gray-500 text-xs">{currentFace.type_line || card.type_line}</p>
+              <p className="text-white text-xs font-medium mb-1 line-clamp-2 select-none">{currentFace.name || card.name}</p>
+              <p className="text-gray-400 text-xs select-none">{currentFace.mana_cost || card.mana_cost || ''}</p>
+              <p className="text-gray-500 text-xs select-none">{currentFace.type_line || card.type_line}</p>
             </div>
           )}
         </div>
@@ -216,6 +251,8 @@ export function DeckCard({ id, card, quantity, category, onRemove, onQuantityCha
             x{quantity}
           </div>
         )}
+
+
 
         {/* Combined Control Bar - all controls in one horizontal bar at top */}
         {!isViewMode && (

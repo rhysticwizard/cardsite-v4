@@ -11,44 +11,14 @@ import { DeckZone } from './deck-zone';
 import { testCards } from './test-cards';
 
 /**
- * PlaymatV2 - Enhanced Card Playmat with Collision Detection
+ * PlaymatV2 - Enhanced Card Playmat with Multi-Select and Collision Detection
  * 
- * This component implements a sophisticated collision detection system that prevents
- * playtest cards from moving through the walls/boundaries of the playmat.
- * 
- * KEY FEATURES:
- * ============
- * 
- * 1. RESPONSIVE COLLISION DETECTION
- *    - Automatically adjusts card dimensions based on screen size
- *    - Recalculates boundaries on window resize
- *    - Supports mobile, tablet, and desktop viewports
- * 
- * 2. VISUAL FEEDBACK SYSTEM
- *    - Red border flash when cards hit boundaries
- *    - Subtle boundary indicators around playmat edges
- *    - Smooth animations for collision feedback
- * 
- * 3. PRECISE BOUNDARY CALCULATIONS
- *    - Accounts for actual card dimensions (150x209px desktop, 120x167px mobile, 100x139px small mobile)
- *    - Includes padding to prevent cards from touching screen edges
- *    - Centers cards properly using transform-origin
- * 
- * 4. ENHANCED DRAG SYSTEM
- *    - Maintains card position during collision
- *    - Prevents cards from "jumping" when hitting walls
- *    - Preserves drag momentum within valid bounds
- * 
- * 5. DEBUG LOGGING
- *    - Comprehensive collision detection logging
- *    - Boundary calculation tracking
- *    - Performance monitoring for drag operations
- * 
- * USAGE:
- * ======
- * Cards can be dragged around the playmat and will automatically stop at the boundaries.
- * Visual feedback (red border flash) indicates when a collision occurs.
- * The system is fully responsive and works across all device sizes.
+ * Features:
+ * - Responsive collision detection for card boundaries
+ * - Desktop-style multi-select with drag selection
+ * - Smart group tapping (normalizes mixed states)
+ * - Multi-card drag and drop with formation preservation
+ * - Card preview on hover
  */
 
 // Interface for battlefield cards
@@ -199,11 +169,14 @@ const ExtraDeckZone: React.FC<{
 const Battlefield: React.FC<{ 
   cards: BattlefieldCard[];
   onCardMove: (cardId: string, x: number, y: number) => void;
-  onCardTap: (cardId: string) => void;
+  onCardTap: (cardId: string, event?: React.MouseEvent) => void;
   activeDragId?: string;
   onCardHover?: (card: MTGCard, event: React.MouseEvent) => void;
   onCardHoverEnd?: () => void;
-}> = ({ cards, onCardMove, onCardTap, activeDragId, onCardHover, onCardHoverEnd }) => {
+  selectedCards: Set<string>;
+  onMouseDown?: (e: React.MouseEvent) => void;
+  onBattlefieldClick?: (e: React.MouseEvent) => void;
+}> = ({ cards, onCardMove, onCardTap, activeDragId, onCardHover, onCardHoverEnd, selectedCards, onMouseDown, onBattlefieldClick }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: 'battlefield',
     data: {
@@ -217,6 +190,9 @@ const Battlefield: React.FC<{
       className={`fixed inset-0 z-[2] cursor-default transition-colors duration-200 ${
         isOver ? 'bg-green-500/10' : ''
       }`}
+      onMouseDown={onMouseDown}
+
+      onClick={onBattlefieldClick}
     >
       {cards.map((card) => (
         <PlaytestCard
@@ -225,15 +201,16 @@ const Battlefield: React.FC<{
           card={card}
           tapped={card.tapped}
           facedown={card.facedown}
-          onTap={() => onCardTap(card.instanceId)}
+          onTap={(event) => onCardTap(card.instanceId, event)}
           style={{
             left: card.position.x,
-            top: card.position.y
+            top: card.position.y,
           }}
-          isDragging={activeDragId === `battlefield-${card.instanceId}`}
+          isDragging={activeDragId === `battlefield-${card.instanceId}` || (activeDragId?.startsWith('battlefield-') && selectedCards.has(card.instanceId) && selectedCards.size > 1 && selectedCards.has(activeDragId.replace('battlefield-', '')))}
           zIndex={card.zIndex || 10}
           onMouseEnter={onCardHover}
           onMouseLeave={onCardHoverEnd}
+          isSelected={selectedCards.has(card.instanceId)}
         />
       ))}
     </div>
@@ -261,6 +238,12 @@ export function PlaymatV2({ initialDeck = [], initialHandCards = [], initialBatt
   const [previewPosition, setPreviewPosition] = useState({ x: 0, y: 0 });
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
 
+  // Multi-select state
+  const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set());
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
+  const [selectionEnd, setSelectionEnd] = useState<{ x: number; y: number } | null>(null);
+
   // Set up sensors for drag and drop with proper activation distance
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -280,6 +263,91 @@ export function PlaymatV2({ initialDeck = [], initialHandCards = [], initialBatt
       },
     })
   );
+
+  // Global mouse event handlers for selection
+  useEffect(() => {
+    if (!isSelecting || !selectionStart) return;
+
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      const newEnd = { x: e.clientX, y: e.clientY };
+      setSelectionEnd(newEnd);
+      
+      // Calculate selection rectangle
+      const left = Math.min(selectionStart.x, e.clientX);
+      const top = Math.min(selectionStart.y, e.clientY);
+      const width = Math.abs(e.clientX - selectionStart.x);
+      const height = Math.abs(e.clientY - selectionStart.y);
+      
+      const rect = { left, top, width, height };
+      
+      if (rect.width > 5 || rect.height > 5) {
+        // Update selected cards
+        const cardsInSelection = battlefieldCards.filter(card => {
+          const cardDimensions = getCardDimensions();
+          const cardBounds = {
+            left: card.position.x - cardDimensions.width / 2,
+            top: card.position.y - cardDimensions.height / 2,
+            width: cardDimensions.width,
+            height: cardDimensions.height
+          };
+          
+          return !(rect.left > cardBounds.left + cardBounds.width ||
+                   rect.left + rect.width < cardBounds.left ||
+                   rect.top > cardBounds.top + cardBounds.height ||
+                   rect.top + rect.height < cardBounds.top);
+        });
+        
+        setSelectedCards(new Set(cardsInSelection.map(card => card.instanceId)));
+      }
+    };
+    
+    const handleGlobalMouseUp = () => {
+      // If we had a valid selection, mark that we just completed one
+      if (selectionStart && selectionEnd) {
+        const rect = {
+          left: Math.min(selectionStart.x, selectionEnd.x),
+          top: Math.min(selectionStart.y, selectionEnd.y),
+          width: Math.abs(selectionEnd.x - selectionStart.x),
+          height: Math.abs(selectionEnd.y - selectionStart.y)
+        };
+        
+        if (rect.width > 5 || rect.height > 5) {
+          setJustCompletedSelection(true);
+          setTimeout(() => setJustCompletedSelection(false), 100);
+        }
+      }
+      
+      setIsSelecting(false);
+      setSelectionStart(null);
+      setSelectionEnd(null);
+    };
+
+    document.addEventListener('mousemove', handleGlobalMouseMove);
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isSelecting, selectionStart, selectionEnd, battlefieldCards]);
+
+  // Keyboard event handlers
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedCards(new Set());
+        setIsSelecting(false);
+        setSelectionStart(null);
+        setSelectionEnd(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   useEffect(() => {
     // Initialize with deck cards or test cards for demo
@@ -312,13 +380,11 @@ export function PlaymatV2({ initialDeck = [], initialHandCards = [], initialBatt
       
       setHandCards(initialHand);
       setLibraryCards(shuffledDeck);
-      setBattlefieldCards(initialBattlefield);
       setExtraDeckCards(initialExtraDeckCards);
       
-      console.log(`Playmat initialized: ${shuffledDeck.length} library cards, ${initialHand.length} starting hand cards, ${initialBattlefield.length} starting battlefield cards, ${initialExtraDeckCards.length} extra deck cards`);
-      
       // If no deck provided, add a test card to battlefield for demo
-      if (initialDeck.length === 0) {
+      let finalBattlefield = initialBattlefield;
+      if (initialDeck.length === 0 && initialBattlefield.length === 0) {
         const testCard: BattlefieldCard = {
           ...testCards[0],
           instanceId: 'test-card-1',
@@ -326,8 +392,23 @@ export function PlaymatV2({ initialDeck = [], initialHandCards = [], initialBatt
           tapped: false,
           zIndex: 1
         };
-        setBattlefieldCards([testCard]);
+        
+        // Add a second test card for multi-select testing
+        const testCard2: BattlefieldCard = {
+          ...testCards[1] || testCards[0], // Use second card or fallback to first
+          instanceId: 'test-card-2',
+          position: { x: window.innerWidth / 2 + 200, y: window.innerHeight / 2 + 100 },
+          tapped: false,
+          zIndex: 2
+        };
+        
+        finalBattlefield = [testCard, testCard2];
+        console.log('🎯 Added test cards to battlefield:', testCard.name, 'at', testCard.position, 'and', testCard2.name, 'at', testCard2.position);
       }
+      
+      setBattlefieldCards(finalBattlefield);
+      
+      console.log(`Playmat initialized: ${shuffledDeck.length} library cards, ${initialHand.length} starting hand cards, ${finalBattlefield.length} starting battlefield cards, ${initialExtraDeckCards.length} extra deck cards`);
       
       // Add window resize handler to recalculate boundaries
       const handleResize = () => {
@@ -468,15 +549,104 @@ export function PlaymatV2({ initialDeck = [], initialHandCards = [], initialBatt
     console.log('Returned card to hand:', handCard.name);
   }, [battlefieldCards]);
 
-  const handleCardTap = useCallback((cardId: string) => {
-    setBattlefieldCards(prev => 
-      prev.map(card => 
-        card.instanceId === cardId 
-          ? { ...card, tapped: !card.tapped }
-          : card
-      )
-    );
-  }, []);
+  const handleCardTap = useCallback((cardId: string, event?: React.MouseEvent) => {
+    // If Ctrl/Cmd is pressed, toggle individual card selection
+    if (event && (event.ctrlKey || event.metaKey)) {
+      setSelectedCards(prev => {
+        const newSelection = new Set(prev);
+        if (newSelection.has(cardId)) {
+          newSelection.delete(cardId);
+        } else {
+          newSelection.add(cardId);
+        }
+        return newSelection;
+      });
+      return;
+    }
+
+    // If card is selected and multiple cards are selected, use smart group tapping
+    if (selectedCards.has(cardId) && selectedCards.size > 1) {
+      setBattlefieldCards(prev => {
+        // Get all selected cards
+        const selectedCardsList = prev.filter(c => selectedCards.has(c.instanceId));
+        
+        // Check if any selected cards are tapped
+        const hasAnyTapped = selectedCardsList.some(c => c.tapped);
+        const hasAnyUntapped = selectedCardsList.some(c => !c.tapped);
+        
+        // Smart tapping logic:
+        // If mixed states (some tapped, some untapped) -> untap all
+        // If all same state -> toggle all
+        const targetState = hasAnyTapped && hasAnyUntapped 
+          ? false // Mixed states - normalize to untapped
+          : !selectedCardsList[0].tapped; // All same state - toggle all
+        
+        return prev.map(c => 
+          selectedCards.has(c.instanceId)
+            ? { ...c, tapped: targetState }
+            : c
+        );
+      });
+    } else {
+      // Normal single card tap - clear selection and tap card
+      setSelectedCards(new Set());
+      setBattlefieldCards(prev => 
+        prev.map(card => 
+          card.instanceId === cardId 
+            ? { ...card, tapped: !card.tapped }
+            : card
+        )
+      );
+    }
+  }, [selectedCards]);
+
+  // Multi-select functions - works like desktop file selection
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Start selection on any left click in empty space (not on a card)
+    if (!activeDragItem && e.button === 0 && e.target === e.currentTarget) {
+      setIsSelecting(true);
+      setSelectionStart({ x: e.clientX, y: e.clientY });
+      setSelectionEnd({ x: e.clientX, y: e.clientY });
+      
+      // Clear existing selection unless Ctrl/Cmd is held
+      if (!e.ctrlKey && !e.metaKey) {
+        setSelectedCards(new Set());
+      }
+      
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, [activeDragItem]);
+
+
+
+  const getSelectionRectangle = useCallback(() => {
+    if (!selectionStart || !selectionEnd) return null;
+    
+    const left = Math.min(selectionStart.x, selectionEnd.x);
+    const top = Math.min(selectionStart.y, selectionEnd.y);
+    const width = Math.abs(selectionEnd.x - selectionStart.x);
+    const height = Math.abs(selectionEnd.y - selectionStart.y);
+    
+    return { left, top, width, height };
+  }, [selectionStart, selectionEnd]);
+
+
+
+  // Clear selection when clicking on empty space (but not after completing a selection)
+  const [justCompletedSelection, setJustCompletedSelection] = useState(false);
+  
+  const handleBattlefieldClick = useCallback((e: React.MouseEvent) => {
+    // Don't clear selection if we just completed a selection
+    if (justCompletedSelection) {
+      setJustCompletedSelection(false);
+      return;
+    }
+    
+    if (!isSelecting && e.target === e.currentTarget) {
+      setSelectedCards(new Set());
+    }
+  }, [isSelecting, justCompletedSelection]);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     console.log('Drag started:', event.active.id);
@@ -599,72 +769,102 @@ export function PlaymatV2({ initialDeck = [], initialHandCards = [], initialBatt
       if (over?.id === 'hand-zone') {
         returnToHand(cardId);
       } else if (delta) {
-        // Update position on battlefield
-        setBattlefieldCards(prev => {
-          const card = prev.find(c => c.instanceId === cardId);
-          if (!card) return prev;
-          
-          /**
-           * Enhanced Collision Detection System
-           * 
-           * This system prevents cards from moving through the walls of the playmat by:
-           * 1. Calculating proper card dimensions based on screen size (responsive)
-           * 2. Computing boundaries that account for card size and padding
-           * 3. Constraining card positions within valid bounds
-           * 4. Providing visual feedback when collision occurs
-           * 
-           * The collision detection works by:
-           * - Getting the proposed new position (current position + drag delta)
-           * - Checking if that position would put the card outside boundaries
-           * - Constraining the position to stay within valid bounds
-           * - Triggering visual feedback when collision is detected
-           * 
-           * BOUNDARY BEHAVIOR:
-           * - ALL SIDES: Cards land flush against all screen edges (no padding)
-           * - Collision detection prevents cards from going off-screen
-           * - Cards can touch the very edges of the viewport
-           */
-          
-          // Enhanced collision detection - calculate proper card dimensions
-          const cardDimensions = getCardDimensions();
-          const boundaries = calculateBoundaries(cardDimensions);
-          
-          // Calculate new position with proper collision detection
-          const proposedX = card.position.x + delta.x;
-          const proposedY = card.position.y + delta.y;
-
-          // Apply boundary constraints (wall collision detection)
-          const newX = Math.max(boundaries.minX, Math.min(boundaries.maxX, proposedX));
-          const newY = Math.max(boundaries.minY, Math.min(boundaries.maxY, proposedY));
-          
-          // Check if collision occurred (for logging purposes)
-          const collisionDetected = newX !== proposedX || newY !== proposedY;
-          if (collisionDetected) {
-            console.log('Collision detected - card stopped at boundary');
-          }
-          
-          console.log('Collision detection:', { 
-            cardId, 
-            boundaries,
-            proposed: { x: proposedX, y: proposedY },
-            final: { x: newX, y: newY },
-            collisionDetected
+        // Check if the dragged card is selected and there are multiple selected cards
+        const isCardSelected = selectedCards.has(cardId);
+        const shouldMoveMultiple = isCardSelected && selectedCards.size > 1;
+        
+        if (shouldMoveMultiple) {
+          console.log('🔄 Moving multiple selected cards:', selectedCards.size);
+          // Move all selected cards together
+          setBattlefieldCards(prev => {
+            const cardDimensions = getCardDimensions();
+            const boundaries = calculateBoundaries(cardDimensions);
+            
+            return prev.map(c => {
+              if (selectedCards.has(c.instanceId)) {
+                // Calculate new position with collision detection for each selected card
+                const proposedX = c.position.x + delta.x;
+                const proposedY = c.position.y + delta.y;
+                
+                const newX = Math.max(boundaries.minX, Math.min(boundaries.maxX, proposedX));
+                const newY = Math.max(boundaries.minY, Math.min(boundaries.maxY, proposedY));
+                
+                return { ...c, position: { x: newX, y: newY }, zIndex: nextZIndex + selectedCards.size };
+              }
+              return c;
+            });
           });
           
-          return prev.map(c => 
-            c.instanceId === cardId 
-              ? { ...c, position: { x: newX, y: newY }, zIndex: nextZIndex }
-              : c
-          );
-        });
-        
-        // Increment z-index for next operation
-        setNextZIndex(prev => prev + 1);
+          // Increment z-index for next operation
+          setNextZIndex(prev => prev + selectedCards.size);
+        } else {
+          // Move single card (original behavior)
+          setBattlefieldCards(prev => {
+            const card = prev.find(c => c.instanceId === cardId);
+            if (!card) return prev;
+            
+            /**
+             * Enhanced Collision Detection System
+             * 
+             * This system prevents cards from moving through the walls of the playmat by:
+             * 1. Calculating proper card dimensions based on screen size (responsive)
+             * 2. Computing boundaries that account for card size and padding
+             * 3. Constraining card positions within valid bounds
+             * 4. Providing visual feedback when collision occurs
+             * 
+             * The collision detection works by:
+             * - Getting the proposed new position (current position + drag delta)
+             * - Checking if that position would put the card outside boundaries
+             * - Constraining the position to stay within valid bounds
+             * - Triggering visual feedback when collision is detected
+             * 
+             * BOUNDARY BEHAVIOR:
+             * - ALL SIDES: Cards land flush against all screen edges (no padding)
+             * - Collision detection prevents cards from going off-screen
+             * - Cards can touch the very edges of the viewport
+             */
+            
+            // Enhanced collision detection - calculate proper card dimensions
+            const cardDimensions = getCardDimensions();
+            const boundaries = calculateBoundaries(cardDimensions);
+            
+            // Calculate new position with proper collision detection
+            const proposedX = card.position.x + delta.x;
+            const proposedY = card.position.y + delta.y;
+
+            // Apply boundary constraints (wall collision detection)
+            const newX = Math.max(boundaries.minX, Math.min(boundaries.maxX, proposedX));
+            const newY = Math.max(boundaries.minY, Math.min(boundaries.maxY, proposedY));
+            
+            // Check if collision occurred (for logging purposes)
+            const collisionDetected = newX !== proposedX || newY !== proposedY;
+            if (collisionDetected) {
+              console.log('Collision detected - card stopped at boundary');
+            }
+            
+            console.log('Collision detection:', { 
+              cardId, 
+              boundaries,
+              proposed: { x: proposedX, y: proposedY },
+              final: { x: newX, y: newY },
+              collisionDetected
+            });
+            
+            return prev.map(c => 
+              c.instanceId === cardId 
+                ? { ...c, position: { x: newX, y: newY }, zIndex: nextZIndex }
+                : c
+            );
+          });
+          
+          // Increment z-index for next operation
+          setNextZIndex(prev => prev + 1);
+        }
       }
     }
     
     setActiveDragItem(null);
-  }, [playCard, returnToHand, playFromLibrary, nextZIndex]);
+  }, [playCard, returnToHand, playFromLibrary, nextZIndex, selectedCards]);
 
   const handleCardMove = useCallback((cardId: string, x: number, y: number) => {
     setBattlefieldCards(prev => 
@@ -731,6 +931,20 @@ export function PlaymatV2({ initialDeck = [], initialHandCards = [], initialBatt
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
+      {/* Multi-select mode indicator */}
+      {isSelecting && (
+        <div className="fixed top-4 left-4 z-[1000] bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+            Selecting Cards - Drag to select multiple
+          </div>
+        </div>
+      )}
+
+
+
+
+
       {/* Playmat Container */}
       <div className="fixed inset-0 m-0 p-0 bg-grid-pattern z-[1] overflow-hidden">
         {/* Battlefield - droppable area */}
@@ -741,6 +955,9 @@ export function PlaymatV2({ initialDeck = [], initialHandCards = [], initialBatt
           activeDragId={activeDragItem?.id}
           onCardHover={handleCardHover}
           onCardHoverEnd={handleCardHoverEnd}
+          selectedCards={selectedCards}
+          onMouseDown={handleMouseDown}
+          onBattlefieldClick={handleBattlefieldClick}
         />
         
         {/* Deck Zone - positioned in bottom right */}
@@ -771,6 +988,27 @@ export function PlaymatV2({ initialDeck = [], initialHandCards = [], initialBatt
         />
       </div>
       
+      {/* Selection Rectangle */}
+      {isSelecting && selectionStart && selectionEnd && (() => {
+        const rect = getSelectionRectangle();
+        
+        if (!rect || (rect.width < 5 && rect.height < 5)) {
+          return null;
+        }
+        
+        return (
+          <div
+            className="fixed pointer-events-none z-[999] border-2 border-blue-500 bg-blue-500/20"
+            style={{
+              left: rect.left,
+              top: rect.top,
+              width: rect.width,
+              height: rect.height
+            }}
+          />
+        );
+      })()}
+      
       {/* Drag Overlay */}
       <DragOverlay dropAnimation={null}>
         {activeDragItem ? (
@@ -779,17 +1017,88 @@ export function PlaymatV2({ initialDeck = [], initialHandCards = [], initialBatt
               // Handle battlefield cards
               if (activeDragItem.id.toString().startsWith('battlefield-')) {
                 const cardId = activeDragItem.id.toString().replace('battlefield-', '');
-                const card = battlefieldCards.find(c => c.instanceId === cardId);
-                return card ? (
-                  <PlaytestCard
-                    id={card.instanceId}
-                    card={card}
-                    tapped={card.tapped}
-                    facedown={card.facedown}
-                    onTap={() => {}}
-                    isDragging={true}
-                  />
-                ) : null;
+                const draggedCard = battlefieldCards.find(c => c.instanceId === cardId);
+                
+                if (!draggedCard) return null;
+                
+                // Check if we're dragging multiple selected cards
+                const isCardSelected = selectedCards.has(cardId);
+                const shouldShowMultiple = isCardSelected && selectedCards.size > 1;
+                
+                if (shouldShowMultiple) {
+                  // Show all selected cards in their relative positions
+                  const selectedCardsList = battlefieldCards.filter(c => selectedCards.has(c.instanceId));
+                  
+                  // Calculate the bounds of all selected cards to center the group
+                  const minX = Math.min(...selectedCardsList.map(c => c.position.x));
+                  const minY = Math.min(...selectedCardsList.map(c => c.position.y));
+                  const maxX = Math.max(...selectedCardsList.map(c => c.position.x));
+                  const maxY = Math.max(...selectedCardsList.map(c => c.position.y));
+                  
+                  // Calculate center point of the selection
+                  const centerX = (minX + maxX) / 2;
+                  const centerY = (minY + maxY) / 2;
+                  
+                  // Find the dragged card's offset from center
+                  const draggedOffsetX = draggedCard.position.x - centerX;
+                  const draggedOffsetY = draggedCard.position.y - centerY;
+                  
+                  console.log('🎯 Drag overlay - showing multiple cards:', {
+                    selectedCount: selectedCards.size,
+                    bounds: { minX, minY, maxX, maxY },
+                    center: { centerX, centerY },
+                    draggedOffset: { draggedOffsetX, draggedOffsetY }
+                  });
+                  
+                  return (
+                    <div className="relative">
+                      {selectedCardsList.map((card) => {
+                        // Calculate each card's position relative to the dragged card
+                        const relativeX = card.position.x - draggedCard.position.x;
+                        const relativeY = card.position.y - draggedCard.position.y;
+                        
+                        return (
+                          <div
+                            key={card.instanceId}
+                            className="absolute"
+                            style={{
+                              left: relativeX,
+                              top: relativeY,
+                              transform: 'translate(-50%, -50%)'
+                            }}
+                          >
+                            <PlaytestCard
+                              id={card.instanceId}
+                              card={card}
+                              tapped={card.tapped}
+                              facedown={card.facedown}
+                              onTap={() => {}}
+                              isDragging={false}
+                              isSelected={true}
+                              style={{
+                                opacity: 1 // All cards at full opacity in drag preview
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                } else {
+                  // Show single card (original behavior)
+
+                  return (
+                    <PlaytestCard
+                      id={draggedCard.instanceId}
+                      card={draggedCard}
+                      tapped={draggedCard.tapped}
+                      facedown={draggedCard.facedown}
+                      onTap={() => {}}
+                      isDragging={false}
+                      isSelected={isCardSelected}
+                    />
+                  );
+                }
               }
               
               // Handle hand cards

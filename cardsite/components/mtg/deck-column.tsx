@@ -32,9 +32,13 @@ interface DeckColumnProps {
   activeId: string | null;
   viewMode?: 'visual' | 'text';
   isViewMode?: boolean;
+  selectedCards?: Set<string>;
+  onCardClick?: (cardId: string, event: React.MouseEvent) => void;
+  activeHoverCard?: string | null;
+  onHoverChange?: (cardId: string | null) => void;
 }
 
-export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, onCardChange, onShowVariants, onShowPreview, onColumnDelete, onColumnRename, onColumnOptionChange, columnOption = 'Starts in Deck', activeId, viewMode = 'visual', isViewMode = false }: DeckColumnProps) {
+export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, onCardChange, onShowVariants, onShowPreview, onColumnDelete, onColumnRename, onColumnOptionChange, columnOption = 'Starts in Deck', activeId, viewMode = 'visual', isViewMode = false, selectedCards = new Set(), onCardClick, activeHoverCard, onHoverChange }: DeckColumnProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showColumnOptions, setShowColumnOptions] = useState(false);
   const [showStartsInPlay, setShowStartsInPlay] = useState(false);
@@ -250,15 +254,17 @@ export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, o
                       <>
                         <button
                           onClick={() => handleOptionSelect('Faceup')}
-                          className="w-full pl-16 pr-3 py-2 text-left text-sm text-white hover:bg-gray-800 transition-colors cursor-pointer"
+                          className="w-full pl-16 pr-3 py-2 text-left text-sm text-white hover:bg-gray-800 transition-colors flex items-center justify-between cursor-pointer"
                         >
-                          Faceup
+                          <span>Faceup</span>
+                          {columnOption === 'Faceup' && <Check className="w-3 h-3" />}
                         </button>
                         <button
                           onClick={() => handleOptionSelect('Facedown')}
-                          className="w-full pl-16 pr-3 py-2 text-left text-sm text-white hover:bg-gray-800 transition-colors cursor-pointer"
+                          className="w-full pl-16 pr-3 py-2 text-left text-sm text-white hover:bg-gray-800 transition-colors flex items-center justify-between cursor-pointer"
                         >
-                          Facedown
+                          <span>Facedown</span>
+                          {columnOption === 'Facedown' && <Check className="w-3 h-3" />}
                         </button>
                       </>
                     )}
@@ -323,6 +329,10 @@ export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, o
                   onShowPreview={onShowPreview}
                   activeId={activeId}
                   isViewMode={isViewMode}
+                  isSelected={selectedCards.has(cardData.id)}
+                  onCardClick={onCardClick}
+                  activeHoverCard={activeHoverCard}
+                  onHoverChange={onHoverChange}
                 />
               ))}
             </div>
@@ -352,6 +362,10 @@ export function DeckColumn({ id, title, cards, onCardRemove, onQuantityChange, o
                     isTopCard={index === cards.length - 1}
                     activeId={activeId}
                     isViewMode={isViewMode}
+                    isSelected={selectedCards.has(cardData.id)}
+                    onCardClick={onCardClick}
+                    activeHoverCard={activeHoverCard}
+                    onHoverChange={onHoverChange}
                   />
                 </div>
               ))}

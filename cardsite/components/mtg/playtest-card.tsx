@@ -10,12 +10,13 @@ interface PlaytestCardProps {
   style?: CSSProperties;
   tapped: boolean;
   facedown?: boolean;
-  onTap: () => void;
+  onTap: (event?: React.MouseEvent) => void;
   id: string;
   isDragging?: boolean;
   zIndex?: number;
   onMouseEnter?: (card: MTGCard, event: React.MouseEvent) => void;
   onMouseLeave?: () => void;
+  isSelected?: boolean;
 }
 
 export function PlaytestCard({
@@ -28,7 +29,8 @@ export function PlaytestCard({
   isDragging = false,
   zIndex = 10,
   onMouseEnter,
-  onMouseLeave
+  onMouseLeave,
+  isSelected = false
 }: PlaytestCardProps) {
   // Use draggable hook with proper configuration
   const {
@@ -63,7 +65,7 @@ export function PlaytestCard({
     // Only trigger tap if we didn't just finish dragging
     event.preventDefault();
     event.stopPropagation();
-    onTap();
+    onTap(event);
   };
 
   // Get card image URL with fallback (using the same pattern as deck-card.tsx)
@@ -129,7 +131,7 @@ export function PlaytestCard({
     <div
       ref={setNodeRef}
       className={`absolute cursor-grab active:cursor-grabbing ${
-        isCurrentlyDragging ? 'opacity-80' : ''
+        isCurrentlyDragging ? 'opacity-0' : ''
       }`}
       style={containerStyle}
       {...attributes}
@@ -152,13 +154,18 @@ export function PlaytestCard({
         className={`
           ${getCardClasses()}
           rounded-lg shadow-lg overflow-hidden
-          border-2 border-white/30
-          transition-all duration-200
+          border-2 transition-all duration-200
           will-change-transform
           ${tapped ? 'rotate-90' : ''}
           ${isCurrentlyDragging ? 'scale-105 shadow-xl' : 'hover:border-white/50'}
+          ${isSelected ? 'border-blue-500 shadow-blue-500/50' : 'border-white/30'}
           relative
         `}
+        style={{
+          ...(isSelected && {
+            boxShadow: '0 0 0 3px #3b82f6, 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+          })
+        }}
       >
         {/* Card content - show back if facedown, otherwise show normal card */}
         {facedown ? (

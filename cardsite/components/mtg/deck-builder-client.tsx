@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { 
   DndContext, 
   DragEndEvent, 
@@ -30,6 +30,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { DraftDeckStorage, type DraftDeck, type DraftCard } from '@/lib/utils/draft-deck-storage';
 import { UnsavedChangesBanner } from '@/components/ui/unsaved-changes-banner';
+import { useMultiSelect } from '@/hooks/use-multi-select';
 
 interface DeckCardData {
   id: string;
@@ -57,7 +58,19 @@ const CARD_CATEGORIES = {
   sideboard: 'Sideboard'
 } as const;
 
+// Utility functions extracted for better performance
+const getScrollOffset = () => ({
+  x: window.pageXOffset || document.documentElement.scrollLeft,
+  y: window.pageYOffset || document.documentElement.scrollTop
+});
 
+const throttle = <T extends (...args: any[]) => void>(func: T, delay: number): T => {
+  let timeoutId: NodeJS.Timeout;
+  return ((...args: any[]) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func(...args), delay);
+  }) as T;
+};
 
 interface DeckBuilderClientProps {
   isViewMode?: boolean;
@@ -90,6 +103,21 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
     isImporting: boolean;
     hasImported: boolean;
   } | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportOptions, setExportOptions] = useState({
+    selectBy: 'All cards',
+    includeOutOfDeck: false,
+    exportType: 'Text',
+    exportFormat: '1x Example Card (set) 123 *F* [Example category] ^Buy,#0066ff^',
+    sectionHeader: 'No section header',
+    useFrontNameOnly: true,
+    includeQuantity: true,
+    includeSetCode: true,
+    includeCollectorNumber: true,
+    includeFoilIndicator: true,
+    includeCategories: true,
+    includeColorTagData: true
+  });
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewCard, setPreviewCard] = useState<MTGCard | null>(null);
   const [previewFaceIndex, setPreviewFaceIndex] = useState(0);
@@ -126,11 +154,117 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isDraftSaving, setIsDraftSaving] = useState(false);
 
-  // Combine default and custom columns
-  const allColumns = { ...CARD_CATEGORIES, ...customColumns };
+  // Global hover management to prevent multiple previews
+  const [activeHoverCard, setActiveHoverCard] = useState<string | null>(null);
+
+  // Memoized computed values
+  const allDeckCards = useMemo(() => {
+    return Object.values(deck).flat().filter((item): item is DeckCardData => !Array.isArray(item));
+  }, [deck]);
+
+  const allColumns = useMemo(() => ({ ...CARD_CATEGORIES, ...customColumns }), [customColumns]);
+  const baseColumns = useMemo(() => Object.keys(CARD_CATEGORIES), []);
+
+  // Cache card positions for better performance
+  const cardPositionsRef = useRef<Map<string, DOMRect>>(new Map());
   
-  // Base columns (top level)
-  const baseColumns = Object.keys(CARD_CATEGORIES);
+  // Optimized card position update function
+  const updateCardPositions = useCallback(() => {
+    const newPositions = new Map<string, DOMRect>();
+    allDeckCards.forEach(card => {
+      const cardElement = document.querySelector(`[data-card-id="${card.id}"]`);
+      if (cardElement) {
+        newPositions.set(card.id, cardElement.getBoundingClientRect());
+      }
+    });
+    cardPositionsRef.current = newPositions;
+  }, [allDeckCards]);
+
+  // Throttled scroll handler
+  const throttledScrollHandler = useMemo(
+    () => throttle(() => {
+      requestAnimationFrame(updateCardPositions);
+    }, 16), // ~60fps
+    [updateCardPositions]
+  );
+
+  // Update card positions when cards change
+  useEffect(() => {
+    requestAnimationFrame(updateCardPositions);
+  }, [updateCardPositions, viewMode]);
+
+  // Multi-select functionality with optimized intersection test
+  const {
+    selectedItems: selectedCards,
+    setSelectedItems: setSelectedCards,
+    isSelecting,
+    selectionStart,
+    selectionEnd,
+    clearSelection,
+    toggleItemSelection,
+    startSelection,
+    getSelectionRectangle,
+    handleContainerClick,
+    justCompletedSelection
+  } = useMultiSelect({
+    items: allDeckCards,
+    getItemId: (card: DeckCardData) => card.id,
+    intersectionTest: (card: DeckCardData, rect) => {
+      const cardRect = cardPositionsRef.current.get(card.id);
+      if (!cardRect) return false;
+      
+      const scroll = getScrollOffset();
+      const cardDocumentRect = {
+        left: cardRect.left + scroll.x,
+        top: cardRect.top + scroll.y,
+        right: cardRect.right + scroll.x,
+        bottom: cardRect.bottom + scroll.y
+      };
+      
+      return !(rect.left > cardDocumentRect.right ||
+               rect.left + rect.width < cardDocumentRect.left ||
+               rect.top > cardDocumentRect.bottom ||
+               rect.top + rect.height < cardDocumentRect.top);
+    },
+    enabled: !isViewMode
+  });
+
+  // Handle scroll updates during selection
+  useEffect(() => {
+    if (!isSelecting) return;
+
+    window.addEventListener('scroll', throttledScrollHandler, { passive: true });
+    
+    return () => {
+      window.removeEventListener('scroll', throttledScrollHandler);
+    };
+  }, [isSelecting, throttledScrollHandler]);
+
+  // Initialize default columns for new decks
+  useEffect(() => {
+    if (!deckId && !isDraftMode && Object.keys(columnPositions).length === 0) {
+      const defaultPositions: Record<string, { row: number; col: number }> = {};
+      const defaultCustomColumns: Record<string, string> = {};
+      
+      // Base columns in first row
+      baseColumns.forEach((key, index) => {
+        if (index < 6) {
+          defaultPositions[key] = { row: 0, col: index };
+        }
+      });
+      
+      // Add placeholders to fill remaining positions
+      const remainingPositions = 6 - Math.min(baseColumns.length, 6);
+      for (let i = 0; i < remainingPositions; i++) {
+        const columnKey = `custom-column-${i + 1}`;
+        defaultCustomColumns[columnKey] = 'Column';
+        defaultPositions[columnKey] = { row: 0, col: baseColumns.length + i };
+      }
+      
+      setColumnPositions(defaultPositions);
+      setCustomColumns(defaultCustomColumns);
+    }
+  }, [deckId, isDraftMode, columnPositions, baseColumns]);
 
   // Sensors for drag and drop
   const sensors = useSensors(
@@ -151,7 +285,7 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
     staleTime: 1000 * 60 * 5,
   });
 
-  // Load existing deck when deckId is provided (view mode or edit mode)
+  // Load existing deck when deckId is provided
   const { data: existingDeck, isLoading: deckLoading } = useQuery({
     queryKey: ['deck-detail', deckId],
     queryFn: async () => {
@@ -532,6 +666,31 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
     }
   }, [isDraftMode, deck, deckDescription, deckFormat, customColumns]);
 
+  // Prevent text selection globally when multi-selecting
+  useEffect(() => {
+    if (isSelecting) {
+      // Add CSS to prevent text selection on the entire page
+      document.body.style.userSelect = 'none';
+      (document.body.style as any).webkitUserSelect = 'none';
+      (document.body.style as any).mozUserSelect = 'none';
+      (document.body.style as any).msUserSelect = 'none';
+    } else {
+      // Restore text selection
+      document.body.style.userSelect = '';
+      (document.body.style as any).webkitUserSelect = '';
+      (document.body.style as any).mozUserSelect = '';
+      (document.body.style as any).msUserSelect = '';
+    }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.userSelect = '';
+      (document.body.style as any).webkitUserSelect = '';
+      (document.body.style as any).mozUserSelect = '';
+      (document.body.style as any).msUserSelect = '';
+    };
+  }, [isSelecting]);
+
   // Calculate total card count (excluding sideboard and extra deck)
   const totalCards = (Object.keys(deck) as Array<keyof DeckState>).reduce((total, key) => {
     if (key === 'name' || key === 'sideboard') return total; // Exclude sideboard from main deck count
@@ -778,6 +937,11 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
   const handleDragStart = (event: DragStartEvent) => {
     const activeId = event.active.id as string;
     setActiveId(activeId);
+    
+    // If dragging a selected card with multiple selections, prepare for multi-card drag
+    if (selectedCards.has(activeId) && selectedCards.size > 1) {
+      console.log('🔄 Starting multi-card drag with', selectedCards.size, 'cards');
+    }
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -909,33 +1073,87 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
       return;
     }
 
-    // Handle moving cards between categories - find the source category
-    const sourceCategory = Object.keys(allColumns).find(cat => {
-      const categoryCards = deck[cat as keyof Omit<DeckState, 'name'>] || (deck as any)[cat] || [];
-      return categoryCards.some && categoryCards.some((c: any) => c.id === activeId);
-    });
-
-    // Check if we're dropping on a category column
+    // Handle moving cards between categories
     const targetCategory = overId in allColumns ? overId : null;
+    
+    if (!targetCategory) return;
 
-    if (sourceCategory && targetCategory && sourceCategory !== targetCategory) {
-      const sourceCard = deck[sourceCategory as keyof Omit<DeckState, 'name'>].find(c => c.id === activeId);
+    // Check if we're doing a multi-select drag
+    const isMultiSelectDrag = selectedCards.has(activeId) && selectedCards.size > 1;
+    
+    if (isMultiSelectDrag) {
+      console.log('🔄 Moving multiple selected cards:', selectedCards.size);
       
-      if (sourceCard) {
-        // Remove from source
-        removeCardFromDeck(activeId, sourceCategory as keyof Omit<DeckState, 'name'>);
+      // Get all selected cards with their source categories
+      const cardsToMove: Array<{
+        card: DeckCardData;
+        sourceCategory: string;
+      }> = [];
+      
+             Object.keys(allColumns).forEach(cat => {
+         const categoryCards = deck[cat as keyof Omit<DeckState, 'name'>] || (deck as any)[cat] || [];
+         if (Array.isArray(categoryCards)) {
+           categoryCards.forEach((card: DeckCardData) => {
+             if (selectedCards.has(card.id)) {
+               cardsToMove.push({ card, sourceCategory: cat });
+             }
+           });
+         }
+       });
+      
+      // Remove all selected cards from their source categories
+      setDeck(prev => {
+        const newDeck = { ...prev };
         
-        // Add to target with updated category
-        const newCard = {
-          ...sourceCard,
-          id: `${sourceCard.card.id}-${targetCategory}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Ensure unique ID
+        cardsToMove.forEach(({ sourceCategory }) => {
+          const categoryKey = sourceCategory as keyof Omit<DeckState, 'name'>;
+          newDeck[categoryKey] = newDeck[categoryKey].filter(card => !selectedCards.has(card.id));
+        });
+        
+        // Add all cards to target category
+        const newCards = cardsToMove.map(({ card }) => ({
+          ...card,
+          id: `${card.card.id}-${targetCategory}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           category: targetCategory as keyof Omit<DeckState, 'name'>
-        };
-        
-        setDeck(prev => ({
-          ...prev,
-          [targetCategory]: [...prev[targetCategory as keyof Omit<DeckState, 'name'>], newCard]
         }));
+        
+        newDeck[targetCategory as keyof Omit<DeckState, 'name'>] = [
+          ...newDeck[targetCategory as keyof Omit<DeckState, 'name'>],
+          ...newCards
+        ];
+        
+        return newDeck;
+      });
+      
+      // Clear selection after moving
+      clearSelection();
+      
+    } else {
+      // Single card move (existing logic)
+      const sourceCategory = Object.keys(allColumns).find(cat => {
+        const categoryCards = deck[cat as keyof Omit<DeckState, 'name'>] || (deck as any)[cat] || [];
+        return categoryCards.some && categoryCards.some((c: any) => c.id === activeId);
+      });
+
+      if (sourceCategory && sourceCategory !== targetCategory) {
+        const sourceCard = deck[sourceCategory as keyof Omit<DeckState, 'name'>].find(c => c.id === activeId);
+        
+        if (sourceCard) {
+          // Remove from source
+          removeCardFromDeck(activeId, sourceCategory as keyof Omit<DeckState, 'name'>);
+          
+          // Add to target with updated category
+          const newCard = {
+            ...sourceCard,
+            id: `${sourceCard.card.id}-${targetCategory}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            category: targetCategory as keyof Omit<DeckState, 'name'>
+          };
+          
+          setDeck(prev => ({
+            ...prev,
+            [targetCategory]: [...prev[targetCategory as keyof Omit<DeckState, 'name'>], newCard]
+          }));
+        }
       }
     }
   };
@@ -969,6 +1187,77 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
   const handleAdvancedSearch = () => {
     setShowAdvancedSearch(!showAdvancedSearch);
   };
+
+  // Multi-select card click handler
+  const handleCardClick = useCallback((cardId: string, event: React.MouseEvent) => {
+    toggleItemSelection(cardId, event);
+  }, [toggleItemSelection]);
+
+  // Batch operations for multi-select
+  // Utility function for batch operations
+  const performBatchOperation = useCallback((operation: 'remove' | 'moveToSideboard' | 'moveToMainDeck') => {
+    if (selectedCards.size === 0) return;
+    
+    setDeck(prev => {
+      const newDeck = { ...prev };
+      
+      switch (operation) {
+        case 'remove':
+          // Remove all selected cards from their respective categories
+          Object.keys(newDeck).forEach(category => {
+            if (category !== 'name' && Array.isArray(newDeck[category as keyof DeckState])) {
+              const categoryKey = category as keyof Omit<DeckState, 'name'>;
+              newDeck[categoryKey] = (newDeck[categoryKey] as DeckCardData[])
+                .filter(card => !selectedCards.has(card.id));
+            }
+          });
+          break;
+          
+        case 'moveToSideboard':
+          const cardsToMove: DeckCardData[] = [];
+          // Remove selected cards from all categories except sideboard
+          Object.keys(newDeck).forEach(category => {
+            if (category !== 'name' && category !== 'sideboard' && Array.isArray(newDeck[category as keyof DeckState])) {
+              const categoryKey = category as keyof Omit<DeckState, 'name'>;
+              const categoryCards = newDeck[categoryKey] as DeckCardData[];
+              const remainingCards = categoryCards.filter(card => {
+                if (selectedCards.has(card.id)) {
+                  cardsToMove.push({ ...card, category: 'sideboard' });
+                  return false;
+                }
+                return true;
+              });
+              newDeck[categoryKey] = remainingCards;
+            }
+          });
+          // Add cards to sideboard
+          newDeck.sideboard = [...newDeck.sideboard, ...cardsToMove];
+          break;
+          
+        case 'moveToMainDeck':
+          // Find selected sideboard cards and move them to appropriate categories
+          const selectedSideboardCards = newDeck.sideboard.filter(card => selectedCards.has(card.id));
+          // Remove selected cards from sideboard
+          newDeck.sideboard = newDeck.sideboard.filter(card => !selectedCards.has(card.id));
+          // Add cards to their appropriate categories
+          selectedSideboardCards.forEach(card => {
+            const category = determineCategory(card.card);
+            const updatedCard = { ...card, category };
+            newDeck[category] = [...newDeck[category], updatedCard];
+          });
+          break;
+      }
+      
+      return newDeck;
+    });
+    
+    clearSelection();
+    setHasUnsavedChanges(true);
+  }, [selectedCards, clearSelection]);
+
+  const handleBatchRemove = useCallback(() => performBatchOperation('remove'), [performBatchOperation]);
+  const handleBatchMoveToSideboard = useCallback(() => performBatchOperation('moveToSideboard'), [performBatchOperation]);
+  const handleBatchMoveToMainDeck = useCallback(() => performBatchOperation('moveToMainDeck'), [performBatchOperation]);
 
   // Handle saving deck
   const handleSaveDeck = useCallback(() => {
@@ -1106,6 +1395,36 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
       return;
     }
     
+    // Ensure default columns are visible when importing
+    const ensureDefaultColumns = () => {
+      // Check if any base columns are visible
+      const visibleBaseColumns = baseColumns.filter(key => 
+        !deletedBaseColumns.has(key) && columnPositions[key]
+      );
+      
+      if (visibleBaseColumns.length === 0) {
+        console.log('No base columns visible, creating default column layout');
+        
+        // Create default positions for all base columns
+        const defaultPositions: Record<string, { row: number; col: number }> = {};
+        baseColumns.forEach((key, index) => {
+          defaultPositions[key] = { row: 0, col: index };
+        });
+        
+        // Update column positions
+        setColumnPositions(prev => ({
+          ...prev,
+          ...defaultPositions
+        }));
+        
+        // Clear deleted base columns to ensure they're all visible
+        setDeletedBaseColumns(new Set());
+      }
+    };
+    
+    // Ensure columns are visible before importing
+    ensureDefaultColumns();
+    
     // Set importing state
     setImportResults({
       successful: [],
@@ -1216,7 +1535,7 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
       failed: results.failed.reduce((sum, card) => sum + card.quantity, 0),
       details: results
     });
-  }, [importText, addCardToDeck]);
+  }, [importText, addCardToDeck, baseColumns, deletedBaseColumns, columnPositions]);
 
   // Handle closing import modal
   const handleCloseImportModal = useCallback(() => {
@@ -1268,6 +1587,144 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
     }
   }, [handleSaveDeckName, handleCancelEditingDeckName]);
 
+  // Utility function to collect and filter cards
+  const getFilteredCards = useCallback((includeOutOfDeck: boolean = true) => {
+    const allCards: DeckCardData[] = [];
+    
+    // Collect all cards from all categories
+    Object.keys(deck).forEach(key => {
+      if (key !== 'name') {
+        const categoryCards = deck[key as keyof Omit<DeckState, 'name'>] as DeckCardData[];
+        if (Array.isArray(categoryCards)) {
+          allCards.push(...categoryCards);
+        }
+      }
+    });
+
+    // Apply filters based on export options
+    if (!includeOutOfDeck) {
+      return allCards.filter(card => {
+        const columnOption = columnOptions[card.category];
+        return columnOption !== 'Sideboard' && columnOption !== 'Starts in Extra';
+      });
+    }
+    
+    return allCards;
+  }, [deck, columnOptions]);
+
+  // Export functionality
+  const generateExportText = useCallback(() => {
+    const filteredCards = getFilteredCards(exportOptions.includeOutOfDeck);
+
+    // Group cards by section if needed
+    const sections: Record<string, DeckCardData[]> = {};
+    
+    if (exportOptions.sectionHeader === 'No section header') {
+      sections[''] = filteredCards;
+    } else if (exportOptions.sectionHeader === 'Primary category') {
+      filteredCards.forEach(card => {
+        const category = card.category;
+        if (!sections[category]) sections[category] = [];
+        sections[category].push(card);
+      });
+    } else if (exportOptions.sectionHeader === 'Card type') {
+      filteredCards.forEach(card => {
+        const cardType = card.card.type_line.split(' ')[0] || 'Other';
+        if (!sections[cardType]) sections[cardType] = [];
+        sections[cardType].push(card);
+      });
+    } else if (exportOptions.sectionHeader === 'Generic (eg: Commander, Mainboard, Sideboard)') {
+      filteredCards.forEach(card => {
+        const columnOption = columnOptions[card.category] || 'Starts in Deck';
+        const section = columnOption === 'Sideboard' ? 'Sideboard' : 
+                       columnOption === 'Starts in Extra' ? 'Extra' : 'Mainboard';
+        if (!sections[section]) sections[section] = [];
+        sections[section].push(card);
+      });
+    }
+
+    // Generate export text
+    let exportText = '';
+    
+    Object.keys(sections).forEach(sectionName => {
+      if (sectionName && exportText) exportText += '\n';
+      
+      if (sectionName) {
+        exportText += `\n// ${sectionName.charAt(0).toUpperCase() + sectionName.slice(1)}\n`;
+      }
+      
+      sections[sectionName].forEach(card => {
+        let line = '';
+        
+        // Quantity
+        if (exportOptions.includeQuantity) {
+          line += `${card.quantity}x `;
+        }
+        
+        // Card name (use front face only for MDFC if enabled)
+        const cardName = exportOptions.useFrontNameOnly && (card.card as any).card_faces?.[0]?.name 
+          ? (card.card as any).card_faces[0].name 
+          : card.card.name;
+        line += cardName;
+        
+        // Set code
+        if (exportOptions.includeSetCode && card.card.set) {
+          line += ` (${card.card.set.toLowerCase()})`;
+        }
+        
+        // Collector number
+        if (exportOptions.includeCollectorNumber && card.card.collector_number) {
+          line += ` ${card.card.collector_number}`;
+        }
+        
+        // Foil indicator
+        if (exportOptions.includeFoilIndicator) {
+          line += ' *F*';
+        }
+        
+        // Categories
+        if (exportOptions.includeCategories) {
+          line += ` [${card.category}]`;
+        }
+        
+        // Color tag data (placeholder)
+        if (exportOptions.includeColorTagData) {
+          line += ' ^Buy,#0066ff^';
+        }
+        
+        exportText += line + '\n';
+      });
+    });
+    
+    return exportText.trim();
+  }, [getFilteredCards, exportOptions, columnOptions]);
+
+  const handleExportCopy = useCallback(() => {
+    const exportText = generateExportText();
+    navigator.clipboard.writeText(exportText);
+  }, [generateExportText]);
+
+  const handleExportDownload = useCallback(() => {
+    const exportText = generateExportText();
+    const blob = new Blob([exportText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${deck.name.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [generateExportText, deck.name]);
+
+  const getSelectedCardCount = useCallback(() => {
+    const filteredCards = getFilteredCards(exportOptions.includeOutOfDeck);
+    const totalCards = filteredCards.reduce((sum, card) => sum + card.quantity, 0);
+    const uniqueCards = filteredCards.length;
+    
+    return { total: totalCards, unique: uniqueCards };
+  }, [getFilteredCards, exportOptions.includeOutOfDeck]);
+
   // Handle discarding draft
   const handleDiscardDraft = useCallback(() => {
     if (isDraftMode && currentDraft) {
@@ -1279,6 +1736,35 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
     }
   }, [isDraftMode, currentDraft, router]);
 
+  // Global event handlers for document-level multi-select
+  const globalMouseDownHandler = useCallback((e: MouseEvent) => {
+    if (isViewMode || e.button !== 0) return;
+    
+    const target = e.target as HTMLElement;
+    const isInteractive = target.closest('button, input, textarea, select, a, [role="button"], [tabindex]');
+    
+    if (!isInteractive) {
+      startSelection(e as any);
+    }
+  }, [isViewMode, startSelection]);
+
+  const globalClickHandler = useCallback((e: MouseEvent) => {
+    if (!isViewMode) {
+      handleContainerClick(e as any);
+    }
+  }, [isViewMode, handleContainerClick]);
+
+  // Document-level event listeners for full-page multi-select
+  useEffect(() => {
+    document.addEventListener('mousedown', globalMouseDownHandler, { passive: false });
+    document.addEventListener('click', globalClickHandler, { passive: true });
+
+    return () => {
+      document.removeEventListener('mousedown', globalMouseDownHandler);
+      document.removeEventListener('click', globalClickHandler);
+    };
+  }, [globalMouseDownHandler, globalClickHandler]);
+
   return (
     <div className="min-h-screen bg-black text-white">
       <DndContext
@@ -1288,6 +1774,30 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
+        {/* Selection Rectangle Overlay */}
+        {isSelecting && selectionStart && selectionEnd && (() => {
+          const rect = getSelectionRectangle();
+          if (!rect || (rect.width < 5 && rect.height < 5)) return null;
+          
+          // Convert document coordinates back to viewport coordinates for display
+          const scroll = getScrollOffset();
+          
+          return (
+            <div
+              className="fixed pointer-events-none z-[999] border-2 border-blue-500 bg-blue-500/20 select-none"
+              style={{
+                left: rect.left - scroll.x,
+                top: rect.top - scroll.y,
+                width: rect.width,
+                height: rect.height,
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                MozUserSelect: 'none',
+                msUserSelect: 'none'
+              }}
+            />
+          );
+        })()}
         <div className="max-w-[1400px] mx-auto px-6 py-4">
           {/* Search Bar - Hidden in view mode */}
           {!isViewMode && (
@@ -1980,7 +2490,12 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
                   <Download className="w-4 h-4 ml-1" />
                 </Button>
                 )}
-                <Button variant="ghost" size="sm" className="text-white hover:text-gray-300">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-white hover:text-gray-300"
+                  onClick={() => setShowExportModal(true)}
+                >
                   Export
                   <Upload className="w-4 h-4 ml-1" />
                 </Button>
@@ -2029,7 +2544,10 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
           </div>
 
                       {/* Deck Columns - Independent Column Positions */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-start">
+                          <div 
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-start select-none"
+                style={{ userSelect: 'none', WebkitUserSelect: 'none', MozUserSelect: 'none', msUserSelect: 'none' }}
+            >
               {(() => {
                 // Build independent column stacks for each of the 6 positions
                 const maxCol = 5; // 6 columns (0-5)
@@ -2088,6 +2606,10 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
                             activeId={activeId}
                             viewMode={viewMode}
                             isViewMode={isViewMode}
+                            selectedCards={selectedCards}
+                            onCardClick={handleCardClick}
+                            activeHoverCard={activeHoverCard}
+                            onHoverChange={setActiveHoverCard}
                           />
                       </div>
                     ))}
@@ -2129,34 +2651,144 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
             }
             
             // Card drag overlay
-            const card = searchResults?.data.find(c => c.id === activeId.replace('search-', '')) ||
-                        Object.values(deck).flat().find(c => Array.isArray(c) ? false : c.id === activeId)?.card;
+            const isMultiSelectDrag = selectedCards.has(activeId) && selectedCards.size > 1;
             
-            if (!card) return null;
-            
-            const imageUrl = card.image_uris?.normal || 
-                           (card as any).card_faces?.[0]?.image_uris?.normal;
-            
-            return (
-              <div className="relative w-48 aspect-[5/7] rounded-lg overflow-hidden shadow-2xl ring-2 ring-white opacity-90">
-                {imageUrl ? (
-                  <Image
-                    src={imageUrl}
-                    alt={card.name}
-                    fill
-                    className="object-cover rounded-lg"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-800/80 border border-gray-600 rounded-lg flex flex-col items-center justify-center p-2 text-center">
-                    <p className="text-white text-xs font-medium mb-1 line-clamp-2">{card.name}</p>
-                    <p className="text-gray-400 text-xs">{card.mana_cost || ''}</p>
+            if (isMultiSelectDrag) {
+              // Multi-select drag: show cards stacked exactly like in the deck columns
+              const selectedDeckCards = Object.values(deck).flat().filter(c => Array.isArray(c) ? false : selectedCards.has(c.id));
+              
+              if (viewMode === 'visual') {
+                // Visual mode: stack cards like in deck columns with proper offset
+                const totalCards = selectedDeckCards.reduce((sum, card) => sum + card.quantity, 0);
+                const stackHeight = Math.min(totalCards - 1, 10) * 60; // Max 10 cards visible in stack
+                
+                return (
+                  <div className="relative" style={{ height: `${268 + stackHeight}px` }}>
+                    {selectedDeckCards.map((deckCard, stackIndex) => {
+                      const card = deckCard.card;
+                      const imageUrl = card.image_uris?.normal || 
+                                     (card as any).card_faces?.[0]?.image_uris?.normal;
+                      
+                      // Create multiple visual cards for quantity > 1
+                      return Array.from({ length: deckCard.quantity }, (_, quantityIndex) => {
+                        const cardIndex = stackIndex * deckCard.quantity + quantityIndex;
+                        const yOffset = Math.min(cardIndex, 10) * 60; // Stack with 60px offset like in deck
+                        const isTopCard = cardIndex === 0;
+                        
+                        return (
+                          <div
+                            key={`${deckCard.id}-${quantityIndex}`}
+                            className="absolute w-48 aspect-[5/7] rounded-lg overflow-hidden transition-all duration-200 bg-gray-800 border border-gray-600"
+                            style={{
+                              top: `${yOffset}px`,
+                              left: '0px',
+                              zIndex: 1000 - cardIndex,
+                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+                            }}
+                          >
+                            {imageUrl ? (
+                              <Image
+                                src={imageUrl}
+                                alt={card.name}
+                                fill
+                                className="object-cover rounded-lg"
+                                sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
+                              />
+                            ) : (
+                              <div className="absolute inset-0 bg-gray-800 border border-gray-600 rounded-lg flex flex-col items-center justify-center p-2 text-center">
+                                <p className="text-white text-xs font-medium mb-1 line-clamp-2">{card.name}</p>
+                                <p className="text-gray-400 text-xs">{card.mana_cost || ''}</p>
+                                <p className="text-gray-500 text-xs">{card.type_line}</p>
+                              </div>
+                            )}
+                            
+                            {/* Quantity Badge - only show on top card if quantity > 1 */}
+                            {isTopCard && deckCard.quantity > 1 && (
+                              <div className="absolute top-8 left-0 bg-gradient-to-r from-black to-transparent text-white text-xs font-bold rounded-r w-12 h-4 flex items-center justify-start pl-1 shadow-md z-30">
+                                x{deckCard.quantity}
+                              </div>
+                            )}
+                            
+                            {/* Blue selection ring on all cards */}
+                            <div className="absolute inset-0 ring-2 ring-blue-500 ring-opacity-75 rounded-lg pointer-events-none" />
+                          </div>
+                        );
+                      });
+                    })}
                   </div>
-                )}
-              </div>
-            );
-          })()}
+                );
+              } else {
+                // Text mode: show cards in a vertical list like in deck columns
+                return (
+                  <div className="w-80 space-y-2">
+                    {selectedDeckCards.map((deckCard) => {
+                      const card = deckCard.card;
+                      
+                      return (
+                        <div
+                          key={deckCard.id}
+                          className="flex items-center justify-between w-full px-3 py-2 bg-black border border-blue-500 border-2 shadow-lg shadow-blue-500/50 rounded transition-colors"
+                        >
+                          {/* Left Side - Quantity and Card Name */}
+                          <div className="flex items-center flex-1 min-w-0">
+                            <div className="flex-shrink-0 mr-3">
+                              <span className="text-gray-400 text-sm font-medium">
+                                {deckCard.quantity}
+                              </span>
+                            </div>
+                            
+                            <div className="flex-1 min-w-0 overflow-hidden">
+                              <span className="text-white text-sm font-medium truncate block">
+                                {card.name}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {/* Right Side - Mana Cost */}
+                          <div className="flex-shrink-0 ml-3">
+                            <span className="text-gray-300 text-sm font-mono">
+                              {card.mana_cost || ''}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              }
+            } else {
+              // Single card drag
+              const card = searchResults?.data.find(c => c.id === activeId.replace('search-', '')) ||
+                          Object.values(deck).flat().find(c => Array.isArray(c) ? false : c.id === activeId)?.card;
+              
+              if (!card) return null;
+              
+              const imageUrl = card.image_uris?.normal || 
+                             (card as any).card_faces?.[0]?.image_uris?.normal;
+              
+              return (
+                <div className="relative w-48 aspect-[5/7] rounded-lg overflow-hidden shadow-2xl ring-2 ring-white opacity-90">
+                  {imageUrl ? (
+                    <Image
+                      src={imageUrl}
+                      alt={card.name}
+                      fill
+                      className="object-cover rounded-lg"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gray-800/80 border border-gray-600 rounded-lg flex flex-col items-center justify-center p-2 text-center">
+                      <p className="text-white text-xs font-medium mb-1 line-clamp-2">{card.name}</p>
+                      <p className="text-gray-400 text-xs">{card.mana_cost || ''}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+                     })()}
         </DragOverlay>
       </DndContext>
+
+
 
       {/* Preview Modal */}
       {showPreviewModal && previewCard && (
@@ -2404,6 +3036,233 @@ Supported formats:
                     <Download className="w-4 h-4 ml-1" />
                   </>
                 )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Export Modal */}
+      <Dialog open={showExportModal} onOpenChange={setShowExportModal}>
+        <DialogContent className="bg-black border-gray-600 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Export {deck.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Select cards by */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Select cards by</label>
+              <select 
+                value={exportOptions.selectBy}
+                onChange={(e) => setExportOptions(prev => ({ ...prev, selectBy: e.target.value }))}
+                className="w-full px-3 py-2 bg-black border border-gray-600 rounded text-white"
+              >
+                <option value="All cards">All cards</option>
+                <option value="Color tags">Color tags</option>
+                <option value="Categories">Categories</option>
+                <option value="Collection status">Collection status</option>
+              </select>
+            </div>
+
+            {/* Include out of deck cards */}
+            <div className="flex items-center space-x-2">
+              <input 
+                type="checkbox" 
+                id="includeOutOfDeck"
+                checked={exportOptions.includeOutOfDeck}
+                onChange={(e) => setExportOptions(prev => ({ ...prev, includeOutOfDeck: e.target.checked }))}
+                className="w-4 h-4"
+              />
+              <label htmlFor="includeOutOfDeck" className="text-sm">Include out of deck cards (eg: maybeboard)</label>
+            </div>
+
+            {/* Selected cards count */}
+            <div className="text-sm text-gray-400">
+              Selected cards: {getSelectedCardCount().total} ({getSelectedCardCount().unique} unique cards)
+            </div>
+
+            {/* Export type */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Export type</label>
+              <select 
+                value={exportOptions.exportType}
+                onChange={(e) => setExportOptions(prev => ({ ...prev, exportType: e.target.value }))}
+                className="w-full px-3 py-2 bg-black border border-gray-600 rounded text-white"
+              >
+                <option value="Text">Text</option>
+                <option value="CSV">CSV</option>
+                <option value="Arena">Arena</option>
+                <option value="MTGO.dek">MTGO.dek</option>
+                <option value="Deck Registration PDF">Deck Registration PDF</option>
+                <option value="EDHREC Article">EDHREC Article</option>
+              </select>
+            </div>
+
+            {/* Export options */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Export options</label>
+              <select 
+                value={exportOptions.exportFormat}
+                onChange={(e) => setExportOptions(prev => ({ ...prev, exportFormat: e.target.value }))}
+                className="w-full px-3 py-2 bg-black border border-gray-600 rounded text-white mb-2"
+              >
+                <option value="1x Example Card (set) 123 *F* [Example category] ^Buy,#0066ff^">1x Example Card (set) 123 *F* [Example category] ^Buy,#0066ff^</option>
+              </select>
+
+              {/* Check all / Uncheck all */}
+              <div className="flex items-center space-x-4 mb-3">
+                <label className="flex items-center space-x-2">
+                  <input 
+                    type="radio" 
+                    name="checkOptions"
+                    onChange={() => setExportOptions(prev => ({ 
+                      ...prev, 
+                      includeQuantity: true,
+                      includeSetCode: true,
+                      includeCollectorNumber: true,
+                      includeFoilIndicator: true,
+                      includeCategories: true,
+                      includeColorTagData: true
+                    }))}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Check all</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input 
+                    type="radio" 
+                    name="checkOptions"
+                    onChange={() => setExportOptions(prev => ({ 
+                      ...prev, 
+                      includeQuantity: false,
+                      includeSetCode: false,
+                      includeCollectorNumber: false,
+                      includeFoilIndicator: false,
+                      includeCategories: false,
+                      includeColorTagData: false
+                    }))}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Uncheck all</span>
+                </label>
+              </div>
+
+              {/* Individual checkboxes */}
+              <div className="space-y-2">
+                <label className="flex items-center space-x-2">
+                  <input 
+                    type="checkbox" 
+                    checked={exportOptions.includeQuantity}
+                    onChange={(e) => setExportOptions(prev => ({ ...prev, includeQuantity: e.target.checked }))}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Include x in quantity</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input 
+                    type="checkbox" 
+                    checked={exportOptions.includeSetCode}
+                    onChange={(e) => setExportOptions(prev => ({ ...prev, includeSetCode: e.target.checked }))}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Include set code</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input 
+                    type="checkbox" 
+                    checked={exportOptions.includeCollectorNumber}
+                    onChange={(e) => setExportOptions(prev => ({ ...prev, includeCollectorNumber: e.target.checked }))}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Include collector number</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input 
+                    type="checkbox" 
+                    checked={exportOptions.includeFoilIndicator}
+                    onChange={(e) => setExportOptions(prev => ({ ...prev, includeFoilIndicator: e.target.checked }))}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Include foil indicator</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input 
+                    type="checkbox" 
+                    checked={exportOptions.includeCategories}
+                    onChange={(e) => setExportOptions(prev => ({ ...prev, includeCategories: e.target.checked }))}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Include categories</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input 
+                    type="checkbox" 
+                    checked={exportOptions.includeColorTagData}
+                    onChange={(e) => setExportOptions(prev => ({ ...prev, includeColorTagData: e.target.checked }))}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Include color tag data</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Section header */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Section header</label>
+              <select 
+                value={exportOptions.sectionHeader}
+                onChange={(e) => setExportOptions(prev => ({ ...prev, sectionHeader: e.target.value }))}
+                className="w-full px-3 py-2 bg-black border border-gray-600 rounded text-white"
+              >
+                <option value="No section header">No section header</option>
+                <option value="Primary category">Primary category</option>
+                <option value="Card type">Card type</option>
+                <option value="Generic (eg: Commander, Mainboard, Sideboard)">Generic (eg: Commander, Mainboard, Sideboard)</option>
+              </select>
+            </div>
+
+            {/* Use front name only for MDFC cards */}
+            <div className="flex items-center space-x-2">
+              <input 
+                type="checkbox" 
+                id="useFrontNameOnly"
+                checked={exportOptions.useFrontNameOnly}
+                onChange={(e) => setExportOptions(prev => ({ ...prev, useFrontNameOnly: e.target.checked }))}
+                className="w-4 h-4"
+              />
+              <label htmlFor="useFrontNameOnly" className="text-sm">Use front name only for MDFC cards</label>
+            </div>
+
+            {/* Export example */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Export example</label>
+              <div className="bg-gray-800 border border-gray-600 rounded p-3 text-sm text-gray-300 max-h-32 overflow-y-auto">
+                <pre className="whitespace-pre-wrap">{generateExportText()}</pre>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex justify-end space-x-2">
+              <Button
+                variant="ghost"
+                onClick={() => setShowExportModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleExportCopy}
+                variant="ghost"
+                className="text-white hover:text-gray-300"
+              >
+                Copy
+              </Button>
+              <Button
+                onClick={handleExportDownload}
+                variant="ghost"
+                className="text-white hover:text-gray-300 bg-green-600 hover:bg-green-700"
+              >
+                Download
               </Button>
             </div>
           </div>
