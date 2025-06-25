@@ -277,7 +277,7 @@ app.prepare().then(() => {
       
       // Store actual card arrays for persistence
       playerState.handCards = [...handCards];
-      playerState.handCount = handCards.length;
+        playerState.handCount = handCards.length;
       
       // Also update library cards if provided
       if (libraryCards) {

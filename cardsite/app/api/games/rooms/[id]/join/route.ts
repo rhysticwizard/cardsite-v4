@@ -195,7 +195,7 @@ export async function POST(
       deckId: deckId || null,
       seatPosition: nextSeat,
       storedDeckId: deckId || 'NULL'
-    });
+      });
 
     // Update room player count
     await db
