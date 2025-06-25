@@ -210,21 +210,26 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
     items: allDeckCards,
     getItemId: (card: DeckCardData) => card.id,
     intersectionTest: (card: DeckCardData, rect) => {
-      const cardRect = cardPositionsRef.current.get(card.id);
-      if (!cardRect) return false;
+      const cardElement = document.querySelector(`[data-card-id="${card.id}"]`);
+      if (!cardElement) return false;
       
+      // Get fresh bounding rect in viewport coordinates
+      const cardRect = cardElement.getBoundingClientRect();
+      
+      // Convert selection rect from document coordinates to viewport coordinates
       const scroll = getScrollOffset();
-      const cardDocumentRect = {
-        left: cardRect.left + scroll.x,
-        top: cardRect.top + scroll.y,
-        right: cardRect.right + scroll.x,
-        bottom: cardRect.bottom + scroll.y
+      const selectionViewportRect = {
+        left: rect.left - scroll.x,
+        top: rect.top - scroll.y,
+        right: rect.left + rect.width - scroll.x,
+        bottom: rect.top + rect.height - scroll.y
       };
       
-      return !(rect.left > cardDocumentRect.right ||
-               rect.left + rect.width < cardDocumentRect.left ||
-               rect.top > cardDocumentRect.bottom ||
-               rect.top + rect.height < cardDocumentRect.top);
+      // Check intersection in viewport coordinates
+      return !(selectionViewportRect.left > cardRect.right ||
+               selectionViewportRect.right < cardRect.left ||
+               selectionViewportRect.top > cardRect.bottom ||
+               selectionViewportRect.bottom < cardRect.top);
     },
     enabled: !isViewMode
   });
@@ -845,9 +850,10 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
   }, [removeCardFromDeck]);
 
   // Change card face/variant
-  const changeCardFace = useCallback((cardId: string, category: keyof Omit<DeckState, 'name'>, newCard: MTGCard) => {
+  const changeCardFace = useCallback((cardId: string, category: string, newCard: MTGCard) => {
     setDeck(prev => {
-      const categoryCards = prev[category as keyof DeckState] as DeckCardData[];
+      // Handle both built-in categories and custom columns
+      const categoryCards = (prev as any)[category];
       // Safety check: ensure the category exists and is an array
       if (!Array.isArray(categoryCards)) {
         console.warn(`Category ${category} is not an array:`, categoryCards);
@@ -856,7 +862,7 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
       
       return {
         ...prev,
-        [category]: categoryCards.map(c => 
+        [category]: categoryCards.map((c: DeckCardData) => 
           c.id === cardId 
             ? { ...c, card: newCard }
             : c
@@ -890,14 +896,15 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
     if (showingVariantsFor) {
       console.log('Variant selected:', card.name, 'for card ID:', showingVariantsFor.cardId);
       
-      // Search through all categories to find the card
-      let foundCategory: keyof Omit<DeckState, 'name'> | null = null;
+      // Search through all categories (built-in and custom) to find the card
+      let foundCategory: string | null = null;
       let foundCardId: string | null = null;
       
-      const categories: (keyof Omit<DeckState, 'name'>)[] = ['creatures', 'spells', 'artifacts', 'enchantments', 'lands', 'sideboard'];
+      // Use allColumns which includes both built-in categories and custom columns
+      const allColumnKeys = Object.keys(allColumns);
       
-      for (const category of categories) {
-        const cards = deck[category];
+      for (const category of allColumnKeys) {
+        const cards = (deck as any)[category];
         if (Array.isArray(cards)) {
           const foundCard = cards.find((c: DeckCardData) => c.id === showingVariantsFor.cardId);
           if (foundCard) {
@@ -2508,7 +2515,12 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
                   Playtest
                   <Play className="w-4 h-4 ml-1" />
                 </Button>
-                <Button variant="ghost" size="sm" className="text-white hover:text-gray-300">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-white hover:text-gray-300"
+                  onClick={() => router.push(`/decks/${deckId}/stats`)}
+                >
                   Details
                   <Info className="w-4 h-4 ml-1" />
                 </Button>

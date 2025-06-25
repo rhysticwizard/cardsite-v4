@@ -8,7 +8,6 @@ import type { MTGCard } from '@/lib/types/mtg';
 import { PlaytestCard } from './playtest-card';
 import { HandZone, type HandCard } from './hand-zone';
 import { DeckZone } from './deck-zone';
-import { testCards } from './test-cards';
 
 /**
  * PlaymatV2 - Enhanced Card Playmat with Multi-Select and Collision Detection
@@ -352,8 +351,8 @@ export function PlaymatV2({ initialDeck = [], initialHandCards = [], initialBatt
   useEffect(() => {
     // Initialize with deck cards or test cards for demo
     if (typeof window !== 'undefined') {
-      // Use provided deck or fall back to test cards
-      const cardsToUse = initialDeck.length > 0 ? initialDeck : testCards;
+      // Use provided deck only (no fallback)
+      const cardsToUse = initialDeck;
       
       // Set library cards (shuffle the deck)
       const shuffledDeck = [...cardsToUse].sort(() => Math.random() - 0.5);
@@ -382,29 +381,8 @@ export function PlaymatV2({ initialDeck = [], initialHandCards = [], initialBatt
       setLibraryCards(shuffledDeck);
       setExtraDeckCards(initialExtraDeckCards);
       
-      // If no deck provided, add a test card to battlefield for demo
+      // Use only the provided initial battlefield cards
       let finalBattlefield = initialBattlefield;
-      if (initialDeck.length === 0 && initialBattlefield.length === 0) {
-        const testCard: BattlefieldCard = {
-          ...testCards[0],
-          instanceId: 'test-card-1',
-          position: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
-          tapped: false,
-          zIndex: 1
-        };
-        
-        // Add a second test card for multi-select testing
-        const testCard2: BattlefieldCard = {
-          ...testCards[1] || testCards[0], // Use second card or fallback to first
-          instanceId: 'test-card-2',
-          position: { x: window.innerWidth / 2 + 200, y: window.innerHeight / 2 + 100 },
-          tapped: false,
-          zIndex: 2
-        };
-        
-        finalBattlefield = [testCard, testCard2];
-        console.log('🎯 Added test cards to battlefield:', testCard.name, 'at', testCard.position, 'and', testCard2.name, 'at', testCard2.position);
-      }
       
       setBattlefieldCards(finalBattlefield);
       

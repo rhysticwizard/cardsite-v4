@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { decks, deckCards, cards } from '@/lib/db/schema';
+import { decks, deckCards, cards, gameParticipants } from '@/lib/db/schema';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or } from 'drizzle-orm';
 
 export async function GET(
   request: NextRequest,
@@ -41,8 +41,69 @@ export async function GET(
       return NextResponse.json({ error: 'Deck not found' }, { status: 404 });
     }
 
-    // Check if user owns the deck or if it's public
-    if (deck.userId !== session.user.id && !deck.isPublic) {
+    // Check if user owns the deck, if it's public, or if they're in the same game room
+    let hasAccess = deck.userId === session.user.id || deck.isPublic;
+    
+    console.log(`🔍 Deck access check for deck ${deckId}:`, {
+      requestingUserId: session.user.id,
+      requestingUserEmail: session.user.email,
+      deckOwnerId: deck.userId,
+      isPublic: deck.isPublic,
+      ownsDecK: deck.userId === session.user.id,
+      hasAccess
+    });
+    
+    if (!hasAccess) {
+      console.log('🎮 Checking game room access...');
+      
+      // Check if both users are participants in the same active game room
+      const sharedGameRooms = await db
+        .select({ 
+          gameId: gameParticipants.gameId,
+          status: gameParticipants.status 
+        })
+        .from(gameParticipants)
+        .where(eq(gameParticipants.userId, session.user.id));
+      
+      console.log(`👤 Requesting user's game participations:`, sharedGameRooms);
+      
+      if (sharedGameRooms.length > 0) {
+        // Check all game rooms where both users are participants
+        const gameIds = sharedGameRooms.map(room => room.gameId);
+        
+        // Check if deck owner is in any of the same game rooms
+        const deckOwnerGameRooms = await db
+          .select({ 
+            gameId: gameParticipants.gameId,
+            status: gameParticipants.status 
+          })
+          .from(gameParticipants)
+          .where(eq(gameParticipants.userId, deck.userId));
+        
+        console.log(`🎯 Deck owner's game participations:`, deckOwnerGameRooms);
+        
+        // Check for any shared game rooms (both users are participants)
+        const sharedGames = deckOwnerGameRooms.filter(ownerRoom => 
+          gameIds.includes(ownerRoom.gameId)
+        );
+        
+        console.log(`🤝 Shared game rooms:`, sharedGames);
+        
+        // Allow access if they're in the same game, regardless of status
+        // (joined, active, etc. - as long as they're both participants)
+        hasAccess = sharedGames.length > 0;
+        
+        if (hasAccess) {
+          console.log(`✅ Allowing deck access: ${session.user.email} viewing deck of player in same game room`);
+        } else {
+          console.log(`❌ No shared game rooms found - access denied`);
+        }
+      } else {
+        console.log(`❌ Requesting user not in any game rooms`);
+      }
+    }
+    
+    if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 

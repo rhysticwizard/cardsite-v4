@@ -194,10 +194,10 @@ export function UserDecksDisplay() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    router.push(`/decks/${deck.id}`);
+                    router.push(`/decks/${deck.id}/stats`);
                   }}
                   className="w-6 h-6 p-0 hover:bg-gray-700 text-white hover:text-white rounded flex items-center justify-center transition-colors"
-                  title="View Deck"
+                  title="View Deck Stats"
                 >
                   <Info className="w-4 h-4" />
                 </button>
@@ -218,7 +218,7 @@ export function UserDecksDisplay() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    router.push(`/playmatv2?deckId=${deck.id}`);
+                    router.push(`/playmat?deckId=${deck.id}`);
                   }}
                   className="w-6 h-6 p-0 hover:bg-gray-700 text-white hover:text-white rounded flex items-center justify-center transition-colors"
                   title="Playtest"

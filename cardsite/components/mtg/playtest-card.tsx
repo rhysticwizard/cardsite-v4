@@ -71,23 +71,31 @@ export function PlaytestCard({
   // Get card image URL with fallback (using the same pattern as deck-card.tsx)
   const getCardImageUrl = (card: MTGCard): string => {
     // Check if card is double-faced
-    const isDoubleFaced = (card as any).card_faces && (card as any).card_faces.length >= 2;
+    const isDoubleFaced = ((card as any).card_faces && (card as any).card_faces.length >= 2) ||
+                          ((card as any).cardFaces && (card as any).cardFaces.length >= 2);
+    
+    // Handle both snake_case (API) and camelCase (database) field names
+    const imageUris = card.image_uris || (card as any).imageUris;
+    const cardFaces = (card as any).card_faces || (card as any).cardFaces;
     
     // Get image URL using the same pattern as deck builder
     const imageUrl = isDoubleFaced 
-      ? (card as any).card_faces[0]?.image_uris?.normal
-      : card.image_uris?.normal || (card as any).card_faces?.[0]?.image_uris?.normal;
+      ? cardFaces?.[0]?.image_uris?.normal || cardFaces?.[0]?.imageUris?.normal
+      : imageUris?.normal || cardFaces?.[0]?.image_uris?.normal || cardFaces?.[0]?.imageUris?.normal;
     
-    // Debug logging for double-faced cards
-    if (!imageUrl) {
-      console.log('PlaytestCard: No image URL found for card:', {
-        name: card.name,
+    // Enhanced debugging - only log when we have issues and useful info
+    if (!imageUrl && card.name) {
+      console.log(`PlaytestCard: No image URL for "${card.name}":`, {
         isDoubleFaced,
         hasImageUris: !!card.image_uris,
         hasCardFaces: !!(card as any).card_faces,
         cardFacesLength: (card as any).card_faces?.length || 0,
-        firstFaceImageUris: (card as any).card_faces?.[0]?.image_uris,
-        rawCard: card
+        // Show actual structure to debug field name issues
+        imageUrisKeys: card.image_uris ? Object.keys(card.image_uris) : [],
+        cardFaceImageUris: (card as any).card_faces?.[0]?.image_uris ? Object.keys((card as any).card_faces[0].image_uris) : [],
+        // Check for alternative field names
+        hasImageUris_alt: !!(card as any).imageUris,
+        hasCardFaces_alt: !!(card as any).cardFaces
       });
     }
     

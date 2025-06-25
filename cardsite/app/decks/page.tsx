@@ -16,7 +16,7 @@ export default function DecksPage() {
         
         {/* Your Decks Section */}
         <div className="mb-12">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-800">
             <div className="flex items-center space-x-3">
               <Users className="w-6 h-6" />
               <h2 className="text-2xl font-bold">Your Decks</h2>
@@ -39,7 +39,7 @@ export default function DecksPage() {
 
         {/* Top 8 Standard Decks */}
         <div className="mb-12">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-800">
             <div className="flex items-center space-x-3">
               <Crown className="w-6 h-6" />
               <h2 className="text-2xl font-bold">Top 8 Standard Decks</h2>
@@ -59,7 +59,7 @@ export default function DecksPage() {
 
         {/* Trending Commander Decks */}
         <div className="mb-12">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-800">
             <div className="flex items-center space-x-3">
               <Flame className="w-6 h-6" />
               <h2 className="text-2xl font-bold">Trending Commander Decks</h2>
@@ -79,7 +79,7 @@ export default function DecksPage() {
 
         {/* Popular Theme Decks */}
         <div className="mb-12">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-800">
             <div className="flex items-center space-x-3">
               <span className="text-2xl">🎭</span>
               <h2 className="text-2xl font-bold">Popular Theme Decks</h2>

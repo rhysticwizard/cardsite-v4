@@ -1,13 +1,14 @@
 import { DeckBuilderClient } from '@/components/mtg/deck-builder-client'
 
 interface EditDeckPageProps {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
-export default function EditDeckPage({ params }: EditDeckPageProps) {
-  const deckId = params.id  // Use string ID directly (no parseInt needed)
+export default async function EditDeckPage({ params }: EditDeckPageProps) {
+  const resolvedParams = await params;
+  const deckId = resolvedParams.id  // Use string ID directly (no parseInt needed)
   
   return (
     <div className="container mx-auto py-6">

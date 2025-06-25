@@ -39,7 +39,7 @@ const securityHeaders = {
     "img-src 'self' data: https: blob:",
     "media-src 'self' https:",
     "connect-src 'self' https://api.scryfall.com https://cards.scryfall.io https://discord.com https://discordapp.com wss: ws:" + 
-      (process.env.NODE_ENV === 'development' ? ' http://localhost:5746 http://localhost:5747 ws://localhost:5746 ws://localhost:5747' : ''),
+      (process.env.NODE_ENV === 'development' ? ' http://localhost:5746 http://localhost:5747 http://localhost:5748 ws://localhost:5746 ws://localhost:5747 ws://localhost:5748' : ''),
     "frame-src 'self' https://www.google.com https://discord.com https://challenges.cloudflare.com",
     "object-src 'none'",
     "base-uri 'self'",

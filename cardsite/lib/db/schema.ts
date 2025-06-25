@@ -142,6 +142,55 @@ export const deckCards = pgTable('deck_cards', {
   deckCategoryIdx: index('deck_cards_deck_category_idx').on(table.deckId, table.category),
 }))
 
+// Game Rooms - for multiplayer MTG games
+export const gameRooms = pgTable('game_rooms', {
+  id: varchar('id', { length: 12 }).primaryKey(),
+  hostId: varchar('host_id', { length: 255 }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 255 }).notNull(),
+  format: varchar('format', { length: 50 }).notNull().default('commander'),
+  status: varchar('status', { length: 20 }).notNull().default('waiting'), // waiting, playing, finished
+  maxPlayers: integer('max_players').notNull().default(4),
+  currentPlayers: integer('current_players').notNull().default(1),
+  settings: jsonb('settings').$type<{
+    powerLevel?: number;
+    isPrivate?: boolean;
+    password?: string;
+    allowSpectators?: boolean;
+    tags?: string[];
+  }>(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  // Game room query indexes
+  hostIdIdx: index('game_rooms_host_id_idx').on(table.hostId),
+  statusIdx: index('game_rooms_status_idx').on(table.status),
+  formatIdx: index('game_rooms_format_idx').on(table.format),
+  createdAtIdx: index('game_rooms_created_at_idx').on(table.createdAt),
+  // Composite indexes for game browsing
+  statusFormatIdx: index('game_rooms_status_format_idx').on(table.status, table.format),
+  publicGamesIdx: index('game_rooms_public_idx').on(table.status, table.createdAt).where(eq(table.status, 'waiting')),
+}))
+
+// Game Participants - tracks players in each game room
+export const gameParticipants = pgTable('game_participants', {
+  id: varchar('id', { length: 12 }).primaryKey(),
+  gameId: varchar('game_id', { length: 12 }).notNull().references(() => gameRooms.id, { onDelete: 'cascade' }),
+  userId: varchar('user_id', { length: 255 }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  deckId: varchar('deck_id', { length: 12 }).references(() => decks.id, { onDelete: 'set null' }),
+  seatPosition: integer('seat_position').notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('joined'), // joined, ready, playing, disconnected
+  joinedAt: timestamp('joined_at').notNull().defaultNow(),
+}, (table) => ({
+  // Participant query indexes
+  gameIdIdx: index('game_participants_game_id_idx').on(table.gameId),
+  userIdIdx: index('game_participants_user_id_idx').on(table.userId),
+  deckIdIdx: index('game_participants_deck_id_idx').on(table.deckId),
+  // Unique constraint: one user per game
+  gameUserIdx: index('game_participants_game_user_idx').on(table.gameId, table.userId),
+  // Unique constraint: one seat per game
+  gameSeatIdx: index('game_participants_game_seat_idx').on(table.gameId, table.seatPosition),
+}))
+
 // Next Auth tables
 export const accounts = pgTable('accounts', {
   userId: text('userId').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -191,6 +240,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   sessions: many(sessions),
   errorLogs: many(errorLogs),
   resolvedErrors: many(errorLogs, { relationName: 'resolvedErrors' }),
+  hostedGames: many(gameRooms),
+  gameParticipations: many(gameParticipants),
 }))
 
 export const errorLogsRelations = relations(errorLogs, ({ one }) => ({
@@ -246,4 +297,27 @@ export const accountsRelations = relations(accounts, ({ one }) => ({
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
   user: one(users, { fields: [sessions.userId], references: [users.id] }),
+}))
+
+export const gameRoomsRelations = relations(gameRooms, ({ one, many }) => ({
+  host: one(users, {
+    fields: [gameRooms.hostId],
+    references: [users.id],
+  }),
+  participants: many(gameParticipants),
+}))
+
+export const gameParticipantsRelations = relations(gameParticipants, ({ one }) => ({
+  game: one(gameRooms, {
+    fields: [gameParticipants.gameId],
+    references: [gameRooms.id],
+  }),
+  user: one(users, {
+    fields: [gameParticipants.userId],
+    references: [users.id],
+  }),
+  deck: one(decks, {
+    fields: [gameParticipants.deckId],
+    references: [decks.id],
+  }),
 })) 
