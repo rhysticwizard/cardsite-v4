@@ -274,12 +274,13 @@ export function FoilCard3D({
   return (
     <div 
       ref={containerRef}
-      className={`relative rounded-lg overflow-hidden cursor-pointer ${className}`}
+      className={`relative cursor-pointer ${className}`}
       style={{ 
         width, 
         height,
         perspective: '1000px',
-        transformStyle: 'preserve-3d'
+        transformStyle: 'preserve-3d',
+        overflow: 'visible'
       }}
       onClick={onCardClick}
       onMouseMove={handleMouseMove}
@@ -291,8 +292,15 @@ export function FoilCard3D({
         <img 
           src={card.imageUrl} 
           alt={card.name}
-          className="absolute inset-0 w-full h-full object-cover rounded-lg"
+          className="absolute rounded-lg"
           style={{ 
+            width: `${width}px`,
+            height: `${height}px`,
+            left: '50%',
+            top: '50%',
+            marginLeft: `${-width / 2}px`,
+            marginTop: `${-height / 2}px`,
+            objectFit: 'cover',
             zIndex: 1,
             transform: `rotateX(${rotation[0]}rad) rotateY(${rotation[1]}rad)`,
             transition: hovered ? 'none' : 'transform 0.3s ease-out'
@@ -302,8 +310,14 @@ export function FoilCard3D({
       
       {/* WebGL foil overlay - adds metallic effect on top */}
       <div 
-        className="absolute inset-0" 
+        className="absolute rounded-lg overflow-hidden" 
         style={{ 
+          width: `${width}px`,
+          height: `${height}px`,
+          left: '50%',
+          top: '50%',
+          marginLeft: `${-width / 2}px`,
+          marginTop: `${-height / 2}px`,
           zIndex: 2,
           mixBlendMode: 'overlay',
           opacity: 0.7,
@@ -340,17 +354,7 @@ export function FoilCard3D({
         {card.name}
       </div>
       
-      {/* WebGL indicator */}
-      <div className="absolute top-2 left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded pointer-events-none" style={{ zIndex: 4 }}>
-        Metallic Foil
-      </div>
-      
-      {/* Debug info */}
-      {hovered && (
-        <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded pointer-events-none" style={{ zIndex: 4 }}>
-          Angle: {rotation[0].toFixed(2)}, {rotation[1].toFixed(2)}
-        </div>
-      )}
+
     </div>
   );
 } 

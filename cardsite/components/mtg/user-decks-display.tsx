@@ -86,15 +86,20 @@ export function UserDecksDisplay() {
   // Show loading state
   if (status === 'loading' || isLoading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-        {Array(6).fill(null).map((_, index) => (
-          <Card key={index} className="bg-gray-900 border-gray-800 animate-pulse">
-            <CardContent className="p-4">
-              <div className="aspect-[63/88] bg-gray-700 rounded mb-2"></div>
-              <div className="h-4 bg-gray-700 rounded mb-1"></div>
-              <div className="h-3 bg-gray-700 rounded w-2/3"></div>
-            </CardContent>
-          </Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+        {Array(5).fill(null).map((_, index) => (
+          <div key={index} className="relative group">
+            <Card className="bg-gray-900 border-gray-800 animate-pulse p-0 overflow-hidden">
+              {/* Image skeleton */}
+              <div className="aspect-[4/3] bg-gray-700"></div>
+              
+              {/* Bottom overlay skeleton */}
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                <div className="h-4 bg-gray-600 rounded mb-1"></div>
+                <div className="h-3 bg-gray-600 rounded w-2/3"></div>
+              </div>
+            </Card>
+          </div>
         ))}
       </div>
     );
@@ -251,13 +256,13 @@ export function UserDecksDisplay() {
       
       {/* Add new deck card */}
       <Link href="/deckbuilder">
-        <Card className="bg-gray-900 border-gray-800 hover:border-gray-600 transition-colors cursor-pointer border-dashed">
-          <CardContent className="p-4 h-full flex items-center justify-center">
+        <Card className="bg-gray-900 border-gray-800 hover:border-gray-600 transition-colors cursor-pointer border-dashed p-0 overflow-hidden">
+          <div className="aspect-[4/3] bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
             <div className="text-center">
               <Plus className="w-8 h-8 text-gray-400 mx-auto mb-2" />
               <span className="text-sm text-gray-400">Create New Deck</span>
             </div>
-          </CardContent>
+          </div>
         </Card>
       </Link>
     </div>

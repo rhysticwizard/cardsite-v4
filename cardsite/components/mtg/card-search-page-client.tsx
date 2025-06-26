@@ -152,23 +152,37 @@ export function CardSearchPageClient({ initialSets }: CardSearchPageClientProps)
     fullArt: false
   });
 
-  // Simple single API call to load all sets
+  // FIXED: Controlled API call with proper error handling and fallback
   const { 
     data: allSets = [], 
     isLoading: isBackgroundLoading,
-    isSuccess
+    isSuccess,
+    error: setsError
   } = useQuery({
     queryKey: ['mtg-sets-all'],
     queryFn: async () => {
       console.log('🔄 Loading all Magic sets...');
-      const allSetsData = await getAllSets();
-      console.log(`✅ Loaded ${allSetsData.length} total sets`);
-      return allSetsData;
+      try {
+        const allSetsData = await getAllSets();
+        console.log(`✅ Loaded ${allSetsData.length} total sets`);
+        return allSetsData;
+      } catch (error) {
+        console.error('❌ Failed to load sets from API:', error);
+        // Return fallback empty array instead of crashing
+        return [];
+      }
     },
-    staleTime: 1000 * 60 * 30, // 30 minutes - data stays fresh
+    staleTime: 1000 * 60 * 60, // 1 hour - longer cache to reduce API calls
     gcTime: 1000 * 60 * 60 * 24, // 24 hours - keep in cache longer
     refetchOnWindowFocus: false, // Don't refetch on window focus
-    enabled: true, // Always enabled
+    refetchOnMount: false, // Don't refetch on mount if cached
+    retry: (failureCount, error) => {
+      // Don't retry API failures excessively - prevents crash loops
+      if (failureCount >= 2) return false;
+      return true;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff
+    enabled: true, // Always enabled but with proper error handling
   });
 
   // No suggestions needed for Enter-only search

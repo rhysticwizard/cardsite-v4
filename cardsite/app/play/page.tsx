@@ -147,6 +147,7 @@ export default function PlayPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('quickplay');
   const [selectedFormat, setSelectedFormat] = useState<string>('');
+  const [showFormatDropdown, setShowFormatDropdown] = useState(false);
   const [showNewGameModal, setShowNewGameModal] = useState(false);
   const [newGameData, setNewGameData] = useState({
     name: '',
@@ -159,7 +160,7 @@ export default function PlayPage() {
   const [showCreateGameDeckModal, setShowCreateGameDeckModal] = useState(false);
   const [selectedGameToJoin, setSelectedGameToJoin] = useState<string | null>(null);
 
-  // Fetch game rooms - only when user is fully authenticated
+  // Fetch game rooms - available to all users for watching
   const { 
     data: gameRooms = [], 
     isLoading, 
@@ -168,10 +169,10 @@ export default function PlayPage() {
   } = useQuery({
     queryKey: ['game-rooms', selectedFormat],
     queryFn: () => fetchGameRooms(selectedFormat || undefined),
-    enabled: !!session?.user && session.user.id !== undefined, // Ensure session is fully loaded
+    enabled: true, // Always enabled for viewing games
     refetchInterval: 5000, // Refresh every 5 seconds
     retry: (failureCount, error) => {
-      // Retry up to 3 times for authentication errors
+      // Retry up to 3 times for fetch errors
       if (error.message.includes('Failed to fetch') && failureCount < 3) {
         return true;
       }
@@ -193,6 +194,18 @@ export default function PlayPage() {
   // Get current game (if any)
   const currentGame = gameRooms.find(game => game.isParticipant);
   const hasCurrentGame = !!currentGame;
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowFormatDropdown(false);
+    };
+    
+    if (showFormatDropdown) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showFormatDropdown]);
 
   // Auto-cleanup on page load
   useEffect(() => {
@@ -298,6 +311,10 @@ export default function PlayPage() {
   };
 
   const handleJoinGame = (gameId: string) => {
+    if (!session?.user) {
+      alert('You must be signed in to join a game');
+      return;
+    }
     setSelectedGameToJoin(gameId);
     setShowDeckSelectionModal(true);
   };
@@ -328,16 +345,7 @@ export default function PlayPage() {
     router.push(`/game/${gameId}`);
   };
 
-  if (!session?.user) {
-    return (
-      <div className="max-w-6xl mx-auto px-6 py-20 text-center">
-        <h2 className="text-2xl font-bold text-white mb-4">Sign In Required</h2>
-        <p className="text-gray-400">
-          You need to be signed in to view and join game rooms.
-        </p>
-      </div>
-    );
-  }
+  // Allow viewing without authentication, but require auth for actions
 
   return (
     <>
@@ -351,7 +359,7 @@ export default function PlayPage() {
               placeholder="Search game rooms..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-12 pr-16 py-3 bg-gray-800 border-gray-600 text-white placeholder-gray-400 focus:border-gray-500 rounded-lg"
+              className="pl-12 pr-16 py-3 bg-black border-gray-600 text-white placeholder-gray-400 focus:border-gray-500 rounded-lg"
             />
             <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
               <X className="w-4 h-4 text-gray-400" />
@@ -360,87 +368,106 @@ export default function PlayPage() {
           </div>
         </div>
 
-        {/* Header with Year and Controls */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex flex-col">
-            <h1 className="text-4xl font-bold text-white">MTG Online</h1>
-            {hasCurrentGame && (
-              <div className="flex items-center space-x-2 mt-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-green-400 text-sm">
-                  Currently in: <span className="text-white font-medium">{currentGame.title}</span>
-                </span>
-                <Button
-                  size="sm"
-                  onClick={() => router.push(`/game/${currentGame.id}`)}
-                  className="bg-green-600 hover:bg-green-700 text-xs px-2 py-1 h-6"
-                >
-                  Enter Game
-                </Button>
-              </div>
-            )}
-          </div>
-          <div className="flex items-center space-x-4">
-            <select
-              value={selectedFormat}
-              onChange={(e) => setSelectedFormat(e.target.value)}
-              className="bg-gray-800 border-gray-600 text-white rounded px-3 py-2 text-sm"
-            >
-              <option value="">All Formats</option>
-              <option value="commander">Commander</option>
-              <option value="modern">Modern</option>
-              <option value="standard">Standard</option>
-              <option value="legacy">Legacy</option>
-              <option value="draft">Draft</option>
-            </select>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => refetch()}
-              className="bg-gray-800 border-gray-600 text-gray-300 hover:text-white"
-            >
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Refresh'}
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => cleanupMutation.mutate()}
-              disabled={cleanupMutation.isPending}
-              className="bg-red-900 border-red-600 text-red-300 hover:text-white hover:bg-red-800"
-            >
-              {cleanupMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Cleanup'}
-            </Button>
-          </div>
-        </div>
+
 
         {/* Tabs */}
         <div className="flex items-center justify-between mb-8 border-b border-gray-800">
-          <div className="flex space-x-8">
-            <Button
-              variant="ghost"
-              onClick={() => setActiveTab('quickplay')}
-              className={`px-0 py-4 border-b-2 transition-colors hover:text-white font-medium ${
-                activeTab === 'quickplay'
-                  ? 'border-green-500 text-green-400'
-                  : 'border-transparent text-gray-400 hover:border-gray-600'
+          <div className="flex space-x-8 items-center">
+
+
+          </div>
+          <div className="flex items-center space-x-4">
+            <div className="relative">
+            <Button 
+                variant="ghost"
+              size="sm" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowFormatDropdown(!showFormatDropdown);
+                }}
+                className="text-gray-300 hover:text-white border border-transparent hover:border-gray-600 hover:bg-transparent transition-colors"
+            >
+                Format {selectedFormat && '(active)'}
+                <Filter className="w-4 h-4 ml-1" />
+            </Button>
+              
+              {showFormatDropdown && (
+                <div className="absolute top-full right-0 mt-2 bg-black border border-gray-600 rounded-lg shadow-xl z-50 min-w-48">
+                  <button
+                    onClick={() => {
+                      setSelectedFormat('');
+                      setShowFormatDropdown(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors rounded-t-lg ${
+                      selectedFormat === '' ? 'bg-gray-700' : ''
+                    }`}
+                  >
+                    All Formats
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedFormat('commander');
+                      setShowFormatDropdown(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                      selectedFormat === 'commander' ? 'bg-gray-700' : ''
+                    }`}
+                  >
+                    Commander
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedFormat('modern');
+                      setShowFormatDropdown(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                      selectedFormat === 'modern' ? 'bg-gray-700' : ''
+                    }`}
+                  >
+                    Modern
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedFormat('standard');
+                      setShowFormatDropdown(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                      selectedFormat === 'standard' ? 'bg-gray-700' : ''
               }`}
             >
-              Quick Play
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => setActiveTab('watch')}
-              className={`px-0 py-4 border-b-2 transition-colors hover:text-white font-medium ${
-                activeTab === 'watch'
-                  ? 'border-green-500 text-green-400'
-                  : 'border-transparent text-gray-400 hover:border-gray-600'
+                    Standard
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedFormat('legacy');
+                      setShowFormatDropdown(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors ${
+                      selectedFormat === 'legacy' ? 'bg-gray-700' : ''
+                    }`}
+                  >
+                    Legacy
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedFormat('draft');
+                      setShowFormatDropdown(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-white hover:bg-gray-700 transition-colors rounded-b-lg ${
+                      selectedFormat === 'draft' ? 'bg-gray-700' : ''
               }`}
             >
-              Watch
-            </Button>
+                    Draft
+                  </button>
+                </div>
+              )}
           </div>
           <Button 
             onClick={() => {
+                if (!session?.user) {
+                  alert('You must be signed in to create a game');
+                  return;
+                }
               if (hasCurrentGame) {
                 alert(`You can only be in one game at a time. Please leave "${currentGame.title}" first.`);
               } else {
@@ -457,6 +484,7 @@ export default function PlayPage() {
             <Plus className="w-4 h-4 mr-2" />
             {hasCurrentGame ? 'Already in Game' : 'New Game'}
           </Button>
+          </div>
         </div>
 
         {/* Game Lobbies */}
@@ -526,7 +554,7 @@ export default function PlayPage() {
                 .map((game: GameRoom) => (
                   <div
                     key={game.id}
-                    className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 hover:border-gray-700 transition-colors"
+                    className="bg-black border border-gray-800 rounded-lg p-6 hover:border-gray-700 transition-colors"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-6">
@@ -580,7 +608,13 @@ export default function PlayPage() {
                           <>
                             <Button 
                               onClick={() => handleEnterGame(game.id)}
-                              className="bg-blue-600 hover:bg-blue-700 text-white"
+                              className="text-white"
+                            >
+                              Spectate
+                            </Button>
+                            <Button 
+                              onClick={() => handleEnterGame(game.id)}
+                              className="text-white"
                             >
                               Enter Game
                             </Button>
@@ -588,23 +622,46 @@ export default function PlayPage() {
                               onClick={() => handleLeaveGame(game.id)}
                               disabled={leaveGameMutation.isPending}
                               variant="outline"
-                              className="border-red-600 text-red-400 hover:bg-red-600 hover:text-white"
+                              className="border-red-600 text-red-400"
                             >
                               {leaveGameMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Leave'}
                             </Button>
                           </>
                         ) : game.status === 'Playing' ? (
-                          <span className="text-yellow-400 font-medium">Playing...</span>
+                          <div className="flex space-x-2">
+                            <Button 
+                              onClick={() => handleEnterGame(game.id)}
+                              className="text-white"
+                            >
+                              Watch
+                            </Button>
+                          </div>
                         ) : hasCurrentGame ? (
-                          <span className="text-gray-500 text-sm">Can't join - already in a game</span>
+                          <div className="flex space-x-2">
+                            <Button 
+                              onClick={() => handleEnterGame(game.id)}
+                              className="text-white"
+                            >
+                              Watch
+                            </Button>
+                            <span className="text-gray-500 text-sm self-center">Can't join - already in a game</span>
+                          </div>
                         ) : (
+                          <div className="flex space-x-2">
+                            <Button 
+                              onClick={() => handleEnterGame(game.id)}
+                              className="text-white"
+                            >
+                              Watch
+                            </Button>
                           <Button 
                             onClick={() => handleJoinGame(game.id)}
                             disabled={joinGameMutation.isPending}
-                            className="bg-gray-800 hover:bg-gray-700 text-white border border-gray-600"
+                              className="text-white border border-gray-600"
                           >
                             {joinGameMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Join Game'}
                           </Button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -614,15 +671,7 @@ export default function PlayPage() {
           </div>
         )}
 
-        {/* Watch Tab Placeholder */}
-        {activeTab === 'watch' && (
-          <div className="text-center py-20">
-            <h2 className="text-2xl font-bold text-white mb-4">Watch Games</h2>
-            <p className="text-gray-400">
-              Watch live MTG games in progress.
-            </p>
-          </div>
-        )}
+
       </div>
 
       {/* New Game Modal */}
@@ -747,9 +796,9 @@ export default function PlayPage() {
         onWithoutDeck={() => handleCreateGameWithDeck()}
         onCancel={() => setShowCreateGameDeckModal(false)}
         onBack={() => {
-          setShowCreateGameDeckModal(false);
-          setShowNewGameModal(true);
-        }}
+                    setShowCreateGameDeckModal(false);
+                    setShowNewGameModal(true);
+                  }}
         withoutDeckLabel="Create Without Deck"
       />
     </>

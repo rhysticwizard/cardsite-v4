@@ -225,8 +225,8 @@ export default function FoilDemo() {
                   name: selectedCard.name,
                   imageUrl: selectedCard.image_uris?.normal
                 }}
-                width={300}
-                height={420}
+                width={450}
+                height={600}
                 className="shadow-2xl transition-all duration-300 cursor-pointer"
                 onCardClick={() => {
                   console.log('3D Foil card clicked:', selectedCard.name);

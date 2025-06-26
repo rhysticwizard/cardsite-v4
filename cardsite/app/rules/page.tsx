@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ChevronRight, Search, BookOpen } from 'lucide-react';
+import { ChevronRight, Search, BookOpen, X } from 'lucide-react';
 
 // Complete rules structure from MTG Comprehensive Rules with detailed subsections
 const rulesData = {
@@ -312,172 +312,152 @@ export default function RulesPage() {
   };
 
   return (
-    <div className="flex text-white min-h-screen">
-      {/* Rules-specific Left Sidebar */}
-      <div className="w-80 min-h-screen bg-gray-900 border-r border-gray-800 p-6 fixed left-32 top-16 bottom-0 overflow-y-auto">
-        {/* Search Box */}
-        <div className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+    <div className="text-white min-h-screen bg-black">
+      <div className="max-w-6xl mx-auto px-8 pb-8">
+        {/* Search Bar */}
+        <div className="mb-8">
+          <div className="relative max-w-xl mx-auto">
             <Input
-              type="text"
-              placeholder="Search rules..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-gray-600"
+              placeholder="Search Magic rules..."
+              className="bg-black border-gray-600 text-white pl-4 pr-12 py-3 rounded-md focus:ring-0 focus:ring-offset-0 focus:border-gray-600 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-gray-600"
             />
+            <button 
+              onClick={searchQuery ? () => setSearchQuery('') : undefined}
+              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+            >
+              {searchQuery ? <X className="w-4 h-4" /> : <Search className="w-4 h-4" />}
+            </button>
           </div>
         </div>
-
-        {/* Rules Version */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Rules Version:
-          </label>
-          <div className="bg-gray-800 border border-gray-700 text-white rounded-md px-3 py-2 text-sm">
-            Effective as of June 6, 2025
-          </div>
-        </div>
-
-        {/* Rules Sections */}
-        <div className="space-y-1">
-          {filteredRules.map((section) => (
-            <div key={section.id}>
-              <Button
-                variant="ghost"
-                onClick={() => toggleSection(section.id)}
-                className="w-full justify-start text-left px-2 py-2 text-white hover:bg-gray-800 font-normal"
-              >
-                <ChevronRight 
-                  className={`w-4 h-4 mr-2 transition-transform ${
-                    expandedSections.includes(section.id) ? 'rotate-90' : ''
-                  }`} 
-                />
-                {section.title}
-              </Button>
-              
-              {/* Subsections */}
-              {expandedSections.includes(section.id) && (
-                <div className="ml-6 mt-1 space-y-1">
-                  {section.subsections.map((subsection) => (
-                    <Button
-                      key={subsection.id}
-                      variant="ghost"
-                      onClick={() => selectRule(subsection)}
-                      className="w-full justify-start text-left px-2 py-1 text-sm text-gray-300 hover:text-white hover:bg-gray-800 font-normal"
-                    >
-                      <BookOpen className="w-3 h-3 mr-2" />
-                      {subsection.title}
-                    </Button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Main Content Area */}
-      <div className="flex-1 ml-80">
-        <div className="p-8">
-          <div className="max-w-4xl mx-auto">
-            {selectedRule ? (
-              /* Selected Rule Display */
-              <div>
-                <div className="mb-6">
-                  <Button
-                    variant="ghost"
-                    onClick={() => setSelectedRule(null)}
-                    className="text-gray-400 hover:text-white mb-4"
-                  >
-                    ← Back to overview
-                  </Button>
-                  <h1 className="text-3xl font-bold text-white mb-2">
-                    {selectedRule.title}
-                  </h1>
-                </div>
-                
-                <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-                  <p className="text-gray-300 leading-relaxed text-lg mb-6">
-                    {selectedRule.content}
-                  </p>
-
-                  {/* Display detailed subsections if they exist */}
-                  {selectedRule.subsections && selectedRule.subsections.length > 0 && (
-                    <div className="space-y-4">
-                      <h3 className="text-xl font-semibold text-white border-b border-gray-700 pb-2">
-                        Detailed Rules
-                      </h3>
-                      <div className="space-y-3">
-                        {selectedRule.subsections.map((subsection: any) => (
-                          <div key={subsection.id} className="border-l-2 border-blue-500 pl-4">
-                            <h4 className="font-semibold text-blue-400 mb-1">
-                              {subsection.title}
-                            </h4>
-                            <p className="text-gray-300 text-sm leading-relaxed">
-                              {subsection.content}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Navigation to adjacent rules */}
-                <div className="mt-8 flex justify-between">
-                  <div className="text-sm text-gray-500">
-                    Rule {selectedRule.id}
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    MTG Comprehensive Rules
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* Overview */
-              <div className="text-center">
-                <h1 className="text-4xl font-bold text-white mb-4">
-                  Magic: The Gathering Comprehensive Rules
+        
+        <div className="max-w-4xl mx-auto">
+          {selectedRule ? (
+            /* Selected Rule Display */
+            <div>
+              <div className="mb-6">
+                <Button
+                  variant="ghost"
+                  onClick={() => setSelectedRule(null)}
+                  className="text-gray-400 hover:text-white mb-4"
+                >
+                  ← Back to overview
+                </Button>
+                <h1 className="text-3xl font-bold text-white mb-2">
+                  {selectedRule.title}
                 </h1>
-                
-                <p className="text-lg text-gray-300 mb-8 leading-relaxed">
-                  The ultimate authority for Magic: The Gathering competitive game play. Navigate through sections using the sidebar or search for specific rules.
+              </div>
+              
+              <div className="bg-black rounded-lg p-6 border border-gray-800">
+                <p className="text-gray-300 leading-relaxed text-lg mb-6">
+                  {selectedRule.content}
                 </p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-12">
-                  {rulesData.sections.map((section) => (
-                    <div
-                      key={section.id}
-                      className="bg-gray-900 rounded-lg p-4 border border-gray-800 hover:border-gray-600 transition-colors cursor-pointer"
-                      onClick={() => toggleSection(section.id)}
-                    >
-                      <h3 className="font-semibold text-white mb-2">{section.title}</h3>
-                      <p className="text-sm text-gray-400">
-                        {section.subsections.length} subsections
-                      </p>
+
+                {/* Display detailed subsections if they exist */}
+                {selectedRule.subsections && selectedRule.subsections.length > 0 && (
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-semibold text-white border-b border-gray-700 pb-2">
+                      Detailed Rules
+                    </h3>
+                    <div className="space-y-3">
+                      {selectedRule.subsections.map((subsection: any) => (
+                        <div key={subsection.id} className="border-l-2 border-blue-500 pl-4">
+                          <h4 className="font-semibold text-blue-400 mb-1">
+                            {subsection.title}
+                          </h4>
+                          <p className="text-gray-300 text-sm leading-relaxed">
+                            {subsection.content}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Navigation to adjacent rules */}
+              <div className="mt-8 flex justify-between">
+                <div className="text-sm text-gray-500">
+                  Rule {selectedRule.id}
+                </div>
+                <div className="text-sm text-gray-500">
+                  MTG Comprehensive Rules
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Category Buttons and Rules Sections */
+            <div>
+              <div className="flex justify-center space-x-4 mb-6">
+                <Button
+                  variant="outline"
+                  className="bg-black border-gray-600 text-white hover:bg-gray-800 hover:text-white"
+                >
+                  Rules
+                </Button>
+                <Button
+                  variant="outline"
+                  className="bg-black border-gray-600 text-white hover:bg-gray-800 hover:text-white"
+                >
+                  Judge Training
+                </Button>
+                <Button
+                  variant="outline"
+                  className="bg-black border-gray-600 text-white hover:bg-gray-800 hover:text-white"
+                >
+                  How to Play
+                </Button>
+              </div>
+              <hr className="border-gray-600 mb-6" />
+              
+              {/* Rules Sections - Centered */}
+              <div className="max-w-2xl mx-auto">
+                <div className="space-y-1">
+                  {filteredRules.map((section) => (
+                    <div key={section.id}>
+                      <Button
+                        variant="ghost"
+                        onClick={() => toggleSection(section.id)}
+                        className="w-full justify-start text-left px-2 py-2 text-white hover:bg-black font-normal"
+                      >
+                        <ChevronRight 
+                          className={`w-4 h-4 mr-2 transition-transform ${
+                            expandedSections.includes(section.id) ? 'rotate-90' : ''
+                          }`} 
+                        />
+                        {section.title}
+                      </Button>
+                      
+                      {/* Subsections */}
+                      {expandedSections.includes(section.id) && (
+                        <div className="ml-6 mt-1 space-y-1">
+                          {section.subsections.map((subsection) => (
+                            <Button
+                              key={subsection.id}
+                              variant="ghost"
+                              onClick={() => selectRule(subsection)}
+                              className="w-full justify-start text-left px-2 py-1 text-sm text-gray-300 hover:text-white hover:bg-black font-normal"
+                            >
+                              <BookOpen className="w-3 h-3 mr-2" />
+                              {subsection.title}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
-
-                <div className="bg-gray-900 rounded-lg p-8 border border-gray-800">
-                  <p className="text-gray-400 mb-4">
-                    Select a section from the sidebar to browse specific rules, or use the search function to find rules by keyword.
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    This document consists of numbered rules followed by a glossary. Many of the numbered rules are divided into subrules, and each separate rule and subrule has its own number.
-                  </p>
-                </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+        </div>
 
-          {/* Footer */}
-          <div className="mt-16 text-center">
-            <p className="text-sm text-gray-500">
-              © 2025 Wizards of the Coast LLC. All rights reserved.
-            </p>
-          </div>
+        {/* Footer */}
+        <div className="mt-16 text-center">
+          <p className="text-sm text-gray-500">
+            © 2025 Wizards of the Coast LLC. All rights reserved.
+          </p>
         </div>
       </div>
     </div>

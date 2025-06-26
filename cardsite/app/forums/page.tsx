@@ -1,6 +1,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import Link from 'next/link';
 import { 
   MessageCircle, 
   Users, 
@@ -26,6 +27,7 @@ import {
 const forumCategories = [
   {
     id: 1,
+    slug: 'general-discussion',
     name: 'General Discussion',
     description: 'Discuss anything related to trading card games that doesn\'t fit into other categories. General questions, announcements, and community discussions.',
     icon: MessageCircle,
@@ -40,6 +42,7 @@ const forumCategories = [
   },
   {
     id: 2,
+    slug: 'strategy-gameplay',
     name: 'Strategy & Gameplay',
     description: 'Discuss gameplay strategies, card interactions, and competitive play. Share tips, tricks, and get advice on improving your game.',
     icon: Trophy,
@@ -54,6 +57,7 @@ const forumCategories = [
   },
   {
     id: 3,
+    slug: 'deck-building',
     name: 'Deck Building',
     description: 'Share your deck ideas, get feedback on your builds, and discuss deck archetypes across all formats.',
     icon: Layers3,
@@ -68,6 +72,7 @@ const forumCategories = [
   },
   {
     id: 4,
+    slug: 'rules-rulings',
     name: 'Rules & Rulings',
     description: 'Ask questions about rules, card interactions, and official rulings. Get clarification on complex game mechanics.',
     icon: Scale,
@@ -82,6 +87,7 @@ const forumCategories = [
   },
   {
     id: 5,
+    slug: 'jokes-humor',
     name: 'Jokes & Humor',
     description: 'Share your funniest card game jokes, memes, and humorous stories. A lighthearted place to enjoy some laughs with the community.',
     icon: Smile,
@@ -100,49 +106,50 @@ function CategoryCard({ category }: { category: typeof forumCategories[0] }) {
   const IconComponent = category.icon;
   
   return (
-    <Card className="bg-black border-gray-800 hover:border-gray-700 transition-colors">
-      <CardHeader className="pb-2">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
-            <IconComponent className="w-5 h-5 text-white" />
+    <Link href={`/forums/${category.slug}`}>
+      <Card className="bg-black border-gray-800 hover:border-gray-700 transition-colors cursor-pointer">
+        <CardHeader className="pb-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
+              <IconComponent className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-white text-lg font-semibold">
+                {category.name}
+              </CardTitle>
+            </div>
           </div>
-          <div className="flex-1">
-            <CardTitle className="text-white text-lg font-semibold">
-              {category.name}
-            </CardTitle>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <div className="space-y-4">
-          <p className="text-gray-400 text-sm leading-relaxed">
-            {category.description}
-          </p>
-          
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="space-y-4">
+            <p className="text-gray-400 text-sm leading-relaxed">
+              {category.description}
+            </p>
+            
 
-
-          {/* Subcategories */}
-          <div className="space-y-2">
-            {category.subcategories.map((sub, index) => {
-              const SubIcon = sub.icon;
-              return (
-                <div key={index} className="flex items-center justify-between p-2 rounded-lg bg-gray-800/50 hover:bg-gray-800 transition-colors cursor-pointer">
-                  <div className="flex items-center gap-2">
-                    <SubIcon className="w-4 h-4 text-gray-400" />
-                    <span className="text-white text-sm font-medium">{sub.name}</span>
+            {/* Subcategories */}
+            <div className="space-y-2">
+              {category.subcategories.map((sub, index) => {
+                const SubIcon = sub.icon;
+                return (
+                  <div key={index} className="flex items-center justify-between p-2 rounded-lg bg-gray-800/50 hover:bg-gray-800 transition-colors cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      <SubIcon className="w-4 h-4 text-gray-400" />
+                      <span className="text-white text-sm font-medium">{sub.name}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                      <span>{sub.topics}</span>
+                      <span>•</span>
+                      <span>{sub.replies}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-gray-500">
-                    <span>{sub.topics}</span>
-                    <span>•</span>
-                    <span>{sub.replies}</span>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }
 

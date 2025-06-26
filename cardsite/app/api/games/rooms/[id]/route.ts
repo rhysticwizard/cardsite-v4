@@ -5,16 +5,14 @@ import { db } from '@/lib/db';
 import { gameRooms, gameParticipants, users, decks } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 
-// GET /api/games/rooms/[id] - Get a specific game room
+// GET /api/games/rooms/[id] - Get a specific game room (public for watching)
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Allow non-authenticated users to view game rooms for watching
 
     const resolvedParams = await params;
     const gameId = resolvedParams.id;

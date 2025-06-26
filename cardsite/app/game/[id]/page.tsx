@@ -59,9 +59,9 @@ export default function GamePage({ params }: GamePageProps) {
   // Load game room data
   useEffect(() => {
     async function loadGameRoom() {
-      if (!gameId || !session?.user?.id) return;
+      if (!gameId) return;
 
-      // Add a small delay to ensure session is fully loaded
+      // Add a small delay to ensure session is fully loaded if present
       await new Promise(resolve => setTimeout(resolve, 100));
 
       try {
@@ -70,10 +70,6 @@ export default function GamePage({ params }: GamePageProps) {
         if (!response.ok) {
           if (response.status === 404) {
             setError('Game room not found');
-            return;
-          }
-          if (response.status === 401) {
-            setError('Authentication required - please sign in again. Try refreshing the page.');
             return;
           }
           const errorText = await response.text();
@@ -91,29 +87,16 @@ export default function GamePage({ params }: GamePageProps) {
     }
 
     loadGameRoom();
-  }, [session?.user?.id, gameId]);
+  }, [gameId]); // Removed session dependency to allow unauthenticated access
 
-  // Redirect to sign in if not authenticated
-  useEffect(() => {
-    if (!session?.user && !loading) {
-      router.push('/auth/signin');
-    }
-  }, [session?.user, loading, router]);
+  // Allow non-authenticated users to watch games
 
   // Don't call notFound() until we've tried to load the gameId
   if (!loading && (!gameId || gameId.length === 0)) {
     notFound();
   }
 
-  if (!session?.user) {
-    return (
-      <div className="h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-white text-xl">Redirecting to sign in...</div>
-        </div>
-      </div>
-    );
-  }
+  // Allow non-authenticated users to continue watching
 
   if (loading) {
     return (
@@ -161,32 +144,35 @@ export default function GamePage({ params }: GamePageProps) {
     return null; // This should not happen due to earlier checks, but satisfies TypeScript
   }
 
-  // Check if user is a participant
-  const currentUser = gameRoom.participants.find(p => p.userId === session.user.id);
-  if (!currentUser) {
-    return (
-      <div className="h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-red-400 mb-4">Access Denied</h1>
-          <p className="text-xl text-gray-400 mb-8">You are not a participant in this game.</p>
-          <button 
-            onClick={() => router.push('/play')}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            ← Back to Lobby
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Check if user is a participant (allow spectators)
+  const currentUser = session?.user?.id ? gameRoom.participants.find(p => p.userId === session.user.id) : null;
+  const isSpectator = !currentUser;
+
+  // Create a mock participant for spectators
+  const spectatorUser: typeof currentUser = isSpectator ? {
+    id: 'spectator',
+    userId: 'spectator',
+    deckId: undefined,
+    seatPosition: 0,
+    status: 'watching',
+    user: {
+      id: 'spectator',
+      username: 'Spectator'
+    }
+  } : currentUser!;
 
   return (
     <div className="h-screen w-screen overflow-hidden">
+      {isSpectator && (
+        <div className="absolute top-4 left-4 z-50 bg-purple-600 text-white px-3 py-1 rounded-lg text-sm font-medium">
+          👁️ Spectating
+        </div>
+      )}
       <PlaymatV2Multiplayer 
         gameRoom={gameRoom}
-        currentUser={currentUser}
-        sessionUserId={session.user.id}
-        spectatorUserId={spectatorUserId || undefined}
+        currentUser={spectatorUser}
+        sessionUserId={session?.user?.id || 'spectator'}
+        spectatorUserId={spectatorUserId || (gameRoom.participants[0]?.userId)}
         onPlayerSwitch={setSpectatorUserId}
       />
     </div>

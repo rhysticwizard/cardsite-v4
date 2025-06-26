@@ -191,6 +191,40 @@ export const gameParticipants = pgTable('game_participants', {
   gameSeatIdx: index('game_participants_game_seat_idx').on(table.gameId, table.seatPosition),
 }))
 
+// Friend Requests - tracks pending friend requests
+export const friendRequests = pgTable('friend_requests', {
+  id: varchar('id', { length: 12 }).primaryKey(),
+  senderId: varchar('sender_id', { length: 255 }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  receiverId: varchar('receiver_id', { length: 255 }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  status: varchar('status', { length: 20 }).notNull().default('pending'), // pending, accepted, declined
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  respondedAt: timestamp('responded_at'),
+}, (table) => ({
+  // Friend request query indexes
+  senderIdIdx: index('friend_requests_sender_id_idx').on(table.senderId),
+  receiverIdIdx: index('friend_requests_receiver_id_idx').on(table.receiverId),
+  statusIdx: index('friend_requests_status_idx').on(table.status),
+  // Unique constraint: one request per sender-receiver pair
+  senderReceiverIdx: index('friend_requests_sender_receiver_idx').on(table.senderId, table.receiverId),
+  // Index for pending requests
+  receiverStatusIdx: index('friend_requests_receiver_status_idx').on(table.receiverId, table.status),
+}))
+
+// Friendships - tracks established friendships
+export const friendships = pgTable('friendships', {
+  id: varchar('id', { length: 12 }).primaryKey(),
+  user1Id: varchar('user1_id', { length: 255 }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  user2Id: varchar('user2_id', { length: 255 }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  // Friendship query indexes
+  user1IdIdx: index('friendships_user1_id_idx').on(table.user1Id),
+  user2IdIdx: index('friendships_user2_id_idx').on(table.user2Id),
+  // Unique constraint: one friendship per user pair (bidirectional)
+  user1User2Idx: index('friendships_user1_user2_idx').on(table.user1Id, table.user2Id),
+  user2User1Idx: index('friendships_user2_user1_idx').on(table.user2Id, table.user1Id),
+}))
+
 // Next Auth tables
 export const accounts = pgTable('accounts', {
   userId: text('userId').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -242,6 +276,10 @@ export const usersRelations = relations(users, ({ many }) => ({
   resolvedErrors: many(errorLogs, { relationName: 'resolvedErrors' }),
   hostedGames: many(gameRooms),
   gameParticipations: many(gameParticipants),
+  sentFriendRequests: many(friendRequests, { relationName: 'sentRequests' }),
+  receivedFriendRequests: many(friendRequests, { relationName: 'receivedRequests' }),
+  friendships1: many(friendships, { relationName: 'user1Friendships' }),
+  friendships2: many(friendships, { relationName: 'user2Friendships' }),
 }))
 
 export const errorLogsRelations = relations(errorLogs, ({ one }) => ({
@@ -319,5 +357,31 @@ export const gameParticipantsRelations = relations(gameParticipants, ({ one }) =
   deck: one(decks, {
     fields: [gameParticipants.deckId],
     references: [decks.id],
+  }),
+}))
+
+export const friendRequestsRelations = relations(friendRequests, ({ one }) => ({
+  sender: one(users, {
+    fields: [friendRequests.senderId],
+    references: [users.id],
+    relationName: 'sentRequests',
+  }),
+  receiver: one(users, {
+    fields: [friendRequests.receiverId],
+    references: [users.id],
+    relationName: 'receivedRequests',
+  }),
+}))
+
+export const friendshipsRelations = relations(friendships, ({ one }) => ({
+  user1: one(users, {
+    fields: [friendships.user1Id],
+    references: [users.id],
+    relationName: 'user1Friendships',
+  }),
+  user2: one(users, {
+    fields: [friendships.user2Id],
+    references: [users.id],
+    relationName: 'user2Friendships',
   }),
 })) 

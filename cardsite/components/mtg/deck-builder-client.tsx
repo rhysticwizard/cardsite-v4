@@ -26,6 +26,7 @@ import { CardSearchResults } from './card-search-results';
 import { DeckColumn } from './deck-column';
 import { PlusButtonDropZone } from './plus-button-drop-zone';
 import Image from 'next/image';
+import { FoilCard3D } from './foil-card-3d';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { DraftDeckStorage, type DraftDeck, type DraftCard } from '@/lib/utils/draft-deck-storage';
@@ -156,6 +157,23 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
 
   // Global hover management to prevent multiple previews
   const [activeHoverCard, setActiveHoverCard] = useState<string | null>(null);
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (showPreviewModal) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.pointerEvents = 'none';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.pointerEvents = '';
+    }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.pointerEvents = '';
+    };
+  }, [showPreviewModal]);
 
   // Memoized computed values
   const allDeckCards = useMemo(() => {
@@ -2804,79 +2822,84 @@ export function DeckBuilderClient({ isViewMode = false, deckId, isDraftMode = fa
 
       {/* Preview Modal */}
       {showPreviewModal && previewCard && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center">
-          {/* Blurred Background Overlay */}
+        <div 
+          className="fixed inset-0 z-[99999] flex items-center justify-center"
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
+          onMouseMove={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+          onPointerMove={(e) => e.stopPropagation()}
+          style={{ pointerEvents: 'all' }}
+        >
+          {/* Blurred Background Overlay - Blocks all interactions */}
           <div 
             className="absolute inset-0 bg-black/80 backdrop-blur-md"
             onClick={() => setShowPreviewModal(false)}
+            style={{ pointerEvents: 'all' }}
           />
           
           {/* Modal Content */}
           <div 
             className="relative z-10 flex items-center justify-center w-full h-full p-8"
             onClick={() => setShowPreviewModal(false)}
+            style={{ pointerEvents: 'all' }}
           >
-            {/* Close Button */}
+            {/* Close Button - moved to bottom center */}
             <button
               onClick={() => setShowPreviewModal(false)}
-              className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors"
+              className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20 px-4 py-2 text-white hover:text-gray-300 rounded-lg transition-colors"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              Close
             </button>
             
             <div className="flex items-center justify-center gap-8 max-w-7xl w-full">
-              {/* Giant Card Image */}
-              <div className="flex-shrink-0">
-                <div 
-                  className="relative aspect-[5/7] w-96 lg:w-[500px] rounded-lg overflow-hidden shadow-2xl border-2 border-white/20"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {(() => {
-                    const cardFaces = (previewCard as any).card_faces;
-                    const isDoubleFaced = cardFaces && cardFaces.length >= 2;
-                    const currentFace = isDoubleFaced ? cardFaces[previewFaceIndex] : previewCard;
-                    const imageUrl = currentFace.image_uris?.normal || previewCard.image_uris?.normal;
-                    
-                    return (
-                      <>
-                        {/* Flip Button - only show for double-faced cards */}
-                        {isDoubleFaced && (
-                          <button
-                            onClick={handlePreviewFlip}
-                            className="absolute top-3 right-3 z-30 w-12 h-12 flex items-center justify-center bg-black/60 hover:bg-black/80 rounded-full text-white transition-colors"
-                            title="Flip card"
-                          >
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                          </button>
-                        )}
-                        
-                        {imageUrl ? (
-                          <Image
-                            src={imageUrl}
-                            alt={currentFace.name || previewCard.name}
-                            fill
-                            className="object-cover rounded-lg"
-                            sizes="500px"
-                            priority
-                          />
-                        ) : (
-                          <div className="absolute inset-0 bg-gray-800 border border-gray-600 rounded-lg flex flex-col items-center justify-center p-6 text-center">
-                            <p className="text-white text-2xl font-medium mb-3">{currentFace.name || previewCard.name}</p>
-                            <p className="text-gray-400 text-xl mb-3">{currentFace.mana_cost || previewCard.mana_cost || ''}</p>
-                            <p className="text-gray-500 text-lg">{currentFace.type_line || previewCard.type_line}</p>
-                            {(currentFace.oracle_text || previewCard.oracle_text) && (
-                              <p className="text-gray-300 text-base mt-6 leading-relaxed">{currentFace.oracle_text || previewCard.oracle_text}</p>
-                            )}
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
+              {/* Giant Card Image with 3D Foil */}
+              <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                {(() => {
+                  const cardFaces = (previewCard as any).card_faces;
+                  const isDoubleFaced = cardFaces && cardFaces.length >= 2;
+                  const currentFace = isDoubleFaced ? cardFaces[previewFaceIndex] : previewCard;
+                  const imageUrl = currentFace.image_uris?.normal || previewCard.image_uris?.normal;
+                  
+                  return (
+                    <div className="relative">
+                      {/* Flip Button - only show for double-faced cards */}
+                      {isDoubleFaced && (
+                        <button
+                          onClick={handlePreviewFlip}
+                          className="absolute top-3 right-3 z-30 w-12 h-12 flex items-center justify-center bg-black/60 hover:bg-black/80 rounded-full text-white transition-colors"
+                          title="Flip card"
+                        >
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        </button>
+                      )}
+                      
+                      {imageUrl ? (
+                        <FoilCard3D
+                          card={{
+                            name: currentFace.name || previewCard.name,
+                            imageUrl: imageUrl
+                          }}
+                          width={700}
+                          height={980}
+                        />
+                      ) : (
+                        <div className="w-96 lg:w-[500px] aspect-[5/7] bg-gray-800 border border-gray-600 rounded-lg flex flex-col items-center justify-center p-6 text-center">
+                          <p className="text-white text-2xl font-medium mb-3">{currentFace.name || previewCard.name}</p>
+                          <p className="text-gray-400 text-xl mb-3">{currentFace.mana_cost || previewCard.mana_cost || ''}</p>
+                          <p className="text-gray-500 text-lg">{currentFace.type_line || previewCard.type_line}</p>
+                          {(currentFace.oracle_text || previewCard.oracle_text) && (
+                            <p className="text-gray-300 text-base mt-6 leading-relaxed">{currentFace.oracle_text || previewCard.oracle_text}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
               
               {/* Card Details Panel */}

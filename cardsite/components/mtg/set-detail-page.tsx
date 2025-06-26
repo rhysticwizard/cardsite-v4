@@ -125,15 +125,15 @@ export function SetDetailPage({ setCode }: SetDetailPageProps) {
     <div className="text-white min-h-screen">
       <div className="max-w-6xl mx-auto px-8 py-8">
         
-        {/* Back Button */}
-        <div className="mb-6">
-          <Link href="/cards">
-            <Button variant="outline" size="sm" className="bg-gray-800 border-gray-600 text-gray-300 hover:text-white">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              All Sets
-            </Button>
-          </Link>
+        {/* Breadcrumb Navigation */}
+        <div className="mb-6 flex items-center space-x-4 text-gray-400 text-sm">
+          <Link href="/cards" className="hover:text-white">All Sets</Link>
+          <span>/</span>
+          <span className="text-white font-medium">{selectedSetInfo?.name || currentSet.name}</span>
         </div>
+
+        {/* Break Line */}
+        <hr className="border-gray-600 mb-6" />
 
         {/* Sub-sets Carousel */}
         {relatedSets.length > 1 && (
@@ -163,7 +163,7 @@ export function SetDetailPage({ setCode }: SetDetailPageProps) {
 
               {/* Carousel Container */}
               <div className="relative flex items-center justify-center">
-                <div className="overflow-hidden w-full py-1 px-0" style={{ width: `${5 * 144 + 4 * 16}px`, height: '140px' }}>
+                <div className="overflow-hidden w-full py-1 px-0" style={{ width: `${5 * 144 + 4 * 16}px`, height: '160px' }}>
                   <div 
                     className="flex gap-4 transition-transform duration-300 ease-in-out h-full"
                     style={{
@@ -178,7 +178,7 @@ export function SetDetailPage({ setCode }: SetDetailPageProps) {
                       <button
                         key={set.id}
                         onClick={() => setSelectedSubSet(set.code)}
-                        className={`flex-shrink-0 text-center space-y-2 p-4 rounded-lg transition-all w-36 h-28 ${
+                        className={`flex-shrink-0 text-center space-y-2 p-4 rounded-lg transition-all w-36 h-32 ${
                           isSelected 
                             ? 'bg-gray-800' 
                             : 'bg-black hover:bg-gray-900'
@@ -221,19 +221,7 @@ export function SetDetailPage({ setCode }: SetDetailPageProps) {
           </div>
         )}
 
-        {/* Set Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">
-            {selectedSetInfo?.name || currentSet.name}
-          </h1>
-          <div className="flex items-center space-x-4 text-gray-400">
-            <span>Released: {selectedSetInfo?.released_at ? new Date(selectedSetInfo.released_at).toLocaleDateString() : 'TBA'}</span>
-            <span>•</span>
-            <span>{selectedSetInfo?.card_count || 0} cards</span>
-            <span>•</span>
-            <span className="uppercase">{selectedSetInfo?.code}</span>
-          </div>
-        </div>
+
 
         {/* Loading State */}
         {cardsLoading && (
@@ -255,9 +243,6 @@ export function SetDetailPage({ setCode }: SetDetailPageProps) {
         {/* Cards Grid */}
         {cardsData && cardsData.data.length > 0 && (
           <>
-            <div className="mb-4 text-gray-400">
-              Showing {cardsData.data.length} of {cardsData.total_cards} cards
-            </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {cardsData.data.map((card: MTGCard) => (
               <Link key={card.id} href={`/card/${card.id}`}>

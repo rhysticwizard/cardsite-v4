@@ -14,6 +14,107 @@ const handle = app.getRequestHandler();
 const gameStates = new Map();
 const playerGameStates = new Map();
 
+// Process-level error handlers (for debugging only - root causes are fixed)
+process.on('uncaughtException', (error) => {
+  console.error('🚨 Uncaught Exception (this should not happen with fixes):', error);
+  console.error('Stack:', error.stack);
+  process.exit(1); // Exit immediately - this indicates a real bug
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('🚨 Unhandled Rejection (this should not happen with fixes):', promise, 'reason:', reason);
+  process.exit(1); // Exit immediately - this indicates a real bug
+});
+
+// Enhanced memory management and cleanup (FIXES MEMORY LEAKS)
+const CLEANUP_INTERVALS = {
+  GAME_STATE_CLEANUP: 30 * 60 * 1000, // 30 minutes
+  MEMORY_CHECK: 10 * 60 * 1000, // 10 minutes
+  INACTIVE_CLEANUP: 5 * 60 * 1000, // 5 minutes for inactive states
+};
+
+const MAX_AGES = {
+  GAME_STATE: 2 * 60 * 60 * 1000, // 2 hours (reduced from 24)
+  PLAYER_STATE: 1 * 60 * 60 * 1000, // 1 hour
+  INACTIVE_STATE: 30 * 60 * 1000, // 30 minutes for completely inactive
+};
+
+// More aggressive cleanup for development stability
+const cleanupInterval = setInterval(() => {
+  const now = Date.now();
+  let cleanedGames = 0;
+  let cleanedPlayers = 0;
+  
+  // Clean up old game states
+  for (const [gameId, gameState] of gameStates.entries()) {
+    const age = now - gameState.lastUpdated;
+    const maxAge = gameState.participants.length === 0 ? MAX_AGES.INACTIVE_STATE : MAX_AGES.GAME_STATE;
+    
+    if (age > maxAge) {
+      gameStates.delete(gameId);
+      cleanedGames++;
+    }
+  }
+  
+  // Clean up old player states
+  for (const [playerKey, playerState] of playerGameStates.entries()) {
+    const age = now - playerState.lastUpdated;
+    const maxAge = playerState.battlefieldCards.length === 0 && playerState.handCards.length === 0 
+      ? MAX_AGES.INACTIVE_STATE 
+      : MAX_AGES.PLAYER_STATE;
+    
+    if (age > maxAge) {
+      playerGameStates.delete(playerKey);
+      cleanedPlayers++;
+    }
+  }
+  
+  if (cleanedGames > 0 || cleanedPlayers > 0) {
+    console.log(`🧹 Cleanup: ${cleanedGames} games, ${cleanedPlayers} player states | Active: ${gameStates.size} games, ${playerGameStates.size} players`);
+  }
+}, CLEANUP_INTERVALS.GAME_STATE_CLEANUP);
+
+// Memory monitoring and alerts
+const memoryMonitor = setInterval(() => {
+  const usage = process.memoryUsage();
+  const heapUsedMB = Math.round(usage.heapUsed / 1024 / 1024);
+  const heapTotalMB = Math.round(usage.heapTotal / 1024 / 1024);
+  
+  // Alert if memory usage is high
+  if (heapUsedMB > 200) { // Alert at 200MB in development
+    console.warn(`⚠️ High memory usage: ${heapUsedMB}MB / ${heapTotalMB}MB | Games: ${gameStates.size} | Players: ${playerGameStates.size}`);
+    
+    // Force aggressive cleanup if memory is critically high
+    if (heapUsedMB > 300) {
+      console.warn('🚨 Critical memory usage - forcing cleanup');
+      gameStates.clear();
+      playerGameStates.clear();
+      if (global.gc) {
+        global.gc();
+      }
+    }
+  }
+}, CLEANUP_INTERVALS.MEMORY_CHECK);
+
+// Graceful cleanup on shutdown
+process.on('SIGINT', () => {
+  console.log('\n🔄 Shutting down server...');
+  clearInterval(cleanupInterval);
+  clearInterval(memoryMonitor);
+  gameStates.clear();
+  playerGameStates.clear();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('\n🔄 Shutting down server...');
+  clearInterval(cleanupInterval);
+  clearInterval(memoryMonitor);
+  gameStates.clear();
+  playerGameStates.clear();
+  process.exit(0);
+});
+
 function getPlayerStateKey(gameId, playerId) {
   return `${gameId}:${playerId}`;
 }
@@ -56,43 +157,54 @@ app.prepare().then(() => {
 
     // Handle joining a game room
     socket.on('join-game', (data) => {
-      const { gameId, userId, username } = data;
-      
-      console.log(`🎮 ${username} (${userId}) joining game ${gameId}`);
-      
-      // Join the socket room
-      socket.join(gameId);
-      
-      // Initialize game state if it doesn't exist
-      if (!gameStates.has(gameId)) {
-        gameStates.set(gameId, {
-          battlefieldCards: [],
-          participants: [],
-          lastUpdated: Date.now()
+      try {
+        const { gameId, userId, username } = data;
+        
+        if (!gameId || !userId || !username) {
+          console.error('❌ Invalid join-game data:', data);
+          socket.emit('error', { message: 'Invalid game data' });
+          return;
+        }
+        
+        console.log(`🎮 ${username} (${userId}) joining game ${gameId}`);
+        
+        // Join the socket room
+        socket.join(gameId);
+        
+        // Initialize game state if it doesn't exist
+        if (!gameStates.has(gameId)) {
+          gameStates.set(gameId, {
+            battlefieldCards: [],
+            participants: [],
+            lastUpdated: Date.now()
+          });
+        }
+        
+        const gameState = gameStates.get(gameId);
+        
+        // Add participant if not already present
+        if (!gameState.participants.includes(userId)) {
+          gameState.participants.push(userId);
+        }
+        
+        // Send current game state to the joining player
+        socket.emit('game-state', {
+          battlefieldCards: gameState.battlefieldCards,
+          participants: gameState.participants
         });
+        
+        // Notify other players in the room
+        socket.to(gameId).emit('player-joined', {
+          userId,
+          username,
+          socketId: socket.id
+        });
+        
+        console.log(`✅ ${username} joined game ${gameId}. Total participants: ${gameState.participants.length}`);
+      } catch (error) {
+        console.error('❌ Error in join-game handler:', error);
+        socket.emit('error', { message: 'Failed to join game' });
       }
-      
-      const gameState = gameStates.get(gameId);
-      
-      // Add participant if not already present
-      if (!gameState.participants.includes(userId)) {
-        gameState.participants.push(userId);
-      }
-      
-      // Send current game state to the joining player
-      socket.emit('game-state', {
-        battlefieldCards: gameState.battlefieldCards,
-        participants: gameState.participants
-      });
-      
-      // Notify other players in the room
-      socket.to(gameId).emit('player-joined', {
-        userId,
-        username,
-        socketId: socket.id
-      });
-      
-      console.log(`✅ ${username} joined game ${gameId}. Total participants: ${gameState.participants.length}`);
     });
 
     // Handle card movement

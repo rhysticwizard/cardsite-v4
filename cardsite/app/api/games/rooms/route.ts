@@ -6,15 +6,12 @@ import { gameRooms, gameParticipants, users } from '@/lib/db/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
-// GET /api/games/rooms - List available game rooms
+// GET /api/games/rooms - List available game rooms (public for viewing)
 export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Get all rooms with host information
+    
+    // Get all rooms with host information - available to everyone for viewing
     const rooms = await db
       .select({
         id: gameRooms.id,
@@ -32,15 +29,18 @@ export async function GET(request: Request) {
       .orderBy(desc(gameRooms.createdAt))
       .limit(20);
 
-    // Get user's participations
-    const userParticipations = await db
-      .select({
-        gameId: gameParticipants.gameId,
-      })
-      .from(gameParticipants)
-      .where(eq(gameParticipants.userId, session.user.id));
+    // Get user's participations only if authenticated
+    let userGameIds = new Set<string>();
+    if (session?.user?.id) {
+      const userParticipations = await db
+        .select({
+          gameId: gameParticipants.gameId,
+        })
+        .from(gameParticipants)
+        .where(eq(gameParticipants.userId, session.user.id));
 
-    const userGameIds = new Set(userParticipations.map(p => p.gameId));
+      userGameIds = new Set(userParticipations.map(p => p.gameId));
+    }
 
     return NextResponse.json({
       success: true,
@@ -54,8 +54,8 @@ export async function GET(request: Request) {
         powerLevel: null,
         status: room.status === 'waiting' ? 'Join Game' : 'Playing',
         createdAt: room.createdAt,
-        isParticipant: userGameIds.has(room.id),
-        isHost: room.hostId === session.user.id,
+        isParticipant: session?.user?.id ? userGameIds.has(room.id) : false,
+        isHost: session?.user?.id === room.hostId,
       }))
     });
 

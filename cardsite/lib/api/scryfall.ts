@@ -3,10 +3,10 @@ import type { MTGCard, ScryfallSearchResponse, ScryfallSearchParams, MTGSet } fr
 
 const SCRYFALL_API_BASE = 'https://api.scryfall.com';
 
-// Create axios instance with rate limiting consideration
+// Create axios instance with rate limiting consideration and shorter timeout
 const scryfallApi = axios.create({
   baseURL: SCRYFALL_API_BASE,
-  timeout: 10000,
+  timeout: 5000, // Reduced from 10s to 5s to prevent hanging requests
   headers: {
     'User-Agent': 'MTG-Community-Hub/1.0',
   },

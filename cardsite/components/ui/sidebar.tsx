@@ -48,14 +48,14 @@ export const Sidebar = React.memo(function Sidebar() {
                 <a href="/" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white transition-colors">
                   <span>Home</span>
                 </a>
+                <a href="/play" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white transition-colors">
+                  <span>Play</span>
+                </a>
                 <a href="/cards" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white transition-colors">
                   <span>Cards</span>
                 </a>
                 <a href="/decks" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white transition-colors">
                   <span>Decks</span>
-                </a>
-                <a href="/forums" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white transition-colors">
-                  <span>Forums</span>
                 </a>
                 <a href="/rules" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white transition-colors">
                   <span>Rules</span>
@@ -63,18 +63,16 @@ export const Sidebar = React.memo(function Sidebar() {
                 <a href="/lore" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white transition-colors">
                   <span>Lore</span>
                 </a>
-                <a href="/collections" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white transition-colors">
-                  <span>Collections</span>
-                </a>
                 <a href="/create" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white transition-colors">
                   <span>Create</span>
                 </a>
-                <a href="/play" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white transition-colors">
-                  <span>Play</span>
+                <a href="/forums" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white transition-colors">
+                  <span>Forums</span>
                 </a>
-                <a href="/playmat" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white transition-colors">
-                  <span>Playmat</span>
+                <a href="/collections" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white transition-colors">
+                  <span>Collections</span>
                 </a>
+
               </nav>
             </div>
           </div>
@@ -112,6 +110,14 @@ export const Sidebar = React.memo(function Sidebar() {
                 <span>Home</span>
               </a>
               <a 
+                href="/play" 
+                className={`flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  pathname === '/play' ? 'text-white' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <span>Play</span>
+              </a>
+              <a 
                 href="/cards" 
                 className={`flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                   pathname === '/cards' ? 'text-white' : 'text-gray-400 hover:text-white'
@@ -126,14 +132,6 @@ export const Sidebar = React.memo(function Sidebar() {
                 }`}
               >
                 <span>Decks</span>
-              </a>
-              <a 
-                href="/forums" 
-                className={`flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  pathname === '/forums' ? 'text-white' : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <span>Forums</span>
               </a>
               <a 
                 href="/rules" 
@@ -152,14 +150,6 @@ export const Sidebar = React.memo(function Sidebar() {
                 <span>Lore</span>
               </a>
               <a 
-                href="/collections" 
-                className={`flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  pathname === '/collections' ? 'text-white' : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <span>Collections</span>
-              </a>
-              <a 
                 href="/create" 
                 className={`flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                   pathname === '/create' ? 'text-white' : 'text-gray-400 hover:text-white'
@@ -168,21 +158,22 @@ export const Sidebar = React.memo(function Sidebar() {
                 <span>Create</span>
               </a>
               <a 
-                href="/play" 
+                href="/forums" 
                 className={`flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  pathname === '/play' ? 'text-white' : 'text-gray-400 hover:text-white'
+                  pathname === '/forums' ? 'text-white' : 'text-gray-400 hover:text-white'
                 }`}
               >
-                <span>Play</span>
+                <span>Forums</span>
               </a>
               <a 
-                href="/playmat" 
+                href="/collections" 
                 className={`flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  pathname === '/playmat' ? 'text-white' : 'text-gray-400 hover:text-white'
+                  pathname === '/collections' ? 'text-white' : 'text-gray-400 hover:text-white'
                 }`}
               >
-                <span>Playmat</span>
+                <span>Collections</span>
               </a>
+
             </nav>
           </div>
         </div>

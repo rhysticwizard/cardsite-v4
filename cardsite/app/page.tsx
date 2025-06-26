@@ -1,4 +1,5 @@
 
+import Link from 'next/link';
 
 export default function Home() {
   return (
@@ -26,8 +27,14 @@ export default function Home() {
 
         {/* Latest News Section */}
         <div className="mb-12">
-          <h2 className="text-2xl font-bold mb-6 text-center">Latest news</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-white">Latest news</h2>
+            <Link href="/news" className="text-gray-400 hover:text-white transition-colors text-sm">
+              View all →
+            </Link>
+          </div>
+          <hr className="border-gray-600 mb-6" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-purple-600 rounded-xl p-6 aspect-square flex flex-col justify-end hover:bg-purple-500 transition-colors">
               <h3 className="text-white font-semibold text-base mb-2">
                 OpenAI announces nonprofit conversation initiative
@@ -49,18 +56,18 @@ export default function Home() {
               <p className="text-teal-200 text-sm">Publication · Apr 10, 2023</p>
             </div>
           </div>
-
-          <div className="flex justify-center">
-            <button className="border border-gray-600 text-gray-300 px-6 py-3 rounded-full text-sm hover:bg-gray-800 hover:border-gray-500 transition-all">
-              View all
-            </button>
-          </div>
         </div>
 
         {/* Twitch Streamers Section */}
         <div className="mb-12">
-          <h2 className="text-2xl font-bold mb-6 text-center">Twitch Streamers</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-white">Twitch Streamers</h2>
+            <Link href="/streamers" className="text-gray-400 hover:text-white transition-colors text-sm">
+              View all →
+            </Link>
+          </div>
+          <hr className="border-gray-600 mb-6" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-red-600 rounded-xl p-6 aspect-square flex flex-col justify-end hover:bg-red-500 transition-colors">
               <h3 className="text-white font-semibold text-base mb-2">MTGNerdGirl</h3>
               <p className="text-red-200 text-sm">Streamer · Twitch</p>
@@ -76,18 +83,18 @@ export default function Home() {
               <p className="text-red-200 text-sm">Content · Twitch</p>
             </div>
           </div>
-          
-          <div className="flex justify-center">
-            <button className="border border-gray-600 text-gray-300 px-6 py-3 rounded-full text-sm hover:bg-gray-800 hover:border-gray-500 transition-all">
-              View all
-            </button>
-          </div>
         </div>
 
         {/* YouTube Creators Section */}
         <div className="mb-12">
-          <h2 className="text-2xl font-bold mb-6 text-center">YouTube Creators</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-white">YouTube Creators</h2>
+            <Link href="/creators" className="text-gray-400 hover:text-white transition-colors text-sm">
+              View all →
+            </Link>
+          </div>
+          <hr className="border-gray-600 mb-6" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-blue-600 rounded-xl p-6 aspect-square flex flex-col justify-end hover:bg-blue-500 transition-colors">
               <h3 className="text-white font-semibold text-base mb-2">The Command Zone</h3>
               <p className="text-blue-200 text-sm">Content · YouTube</p>
@@ -103,18 +110,18 @@ export default function Home() {
               <p className="text-blue-200 text-sm">Budget · YouTube</p>
             </div>
           </div>
-          
-          <div className="flex justify-center">
-            <button className="border border-gray-600 text-gray-300 px-6 py-3 rounded-full text-sm hover:bg-gray-800 hover:border-gray-500 transition-all">
-              View all
-            </button>
-          </div>
         </div>
 
         {/* MTG Blogs Section */}
         <div className="mb-12">
-          <h2 className="text-2xl font-bold mb-6 text-center">MTG Blogs</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-white">MTG Blogs</h2>
+            <Link href="/blogs" className="text-gray-400 hover:text-white transition-colors text-sm">
+              View all →
+            </Link>
+          </div>
+          <hr className="border-gray-600 mb-6" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-gray-700 rounded-xl p-6 aspect-square flex flex-col justify-end hover:bg-gray-600 transition-colors">
               <h3 className="text-white font-semibold text-base mb-2">Best Spy Stories</h3>
               <p className="text-gray-400 text-sm">Blog · MTG Salvation</p>
@@ -129,12 +136,6 @@ export default function Home() {
               <h3 className="text-white font-semibold text-base mb-2">MTG Arena Updates</h3>
               <p className="text-gray-400 text-sm">News · Wizards of the Coast</p>
             </div>
-          </div>
-          
-          <div className="flex justify-center">
-            <button className="border border-gray-600 text-gray-300 px-6 py-3 rounded-full text-sm hover:bg-gray-800 hover:border-gray-500 transition-all">
-              View all
-            </button>
           </div>
         </div>
 
