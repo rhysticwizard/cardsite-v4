@@ -155,9 +155,9 @@ function CategoryCard({ category }: { category: typeof forumCategories[0] }) {
 
 export default function ForumsPage() {
   return (
-    <>
+    <div className="min-h-screen bg-black">
       {/* Centered container layout with generous horizontal margins */}
-      <div className="max-w-5xl mx-auto px-6 pb-8">
+      <div className="max-w-5xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-white mb-2">CATEGORIES</h1>
@@ -171,6 +171,6 @@ export default function ForumsPage() {
           ))}
         </div>
       </div>
-    </>
+    </div>
   );
 } 

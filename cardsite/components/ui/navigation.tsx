@@ -4,6 +4,7 @@ import { User, LogOut, Settings } from "lucide-react";
 import React from "react";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { Button } from "./button";
 import {
   DropdownMenu,

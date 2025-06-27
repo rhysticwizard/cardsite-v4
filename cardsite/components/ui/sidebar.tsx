@@ -36,6 +36,17 @@ export const Sidebar = React.memo(function Sidebar() {
       <>
         <aside className="fixed left-0 top-0 h-screen w-32 bg-black overflow-hidden z-50 transition-all duration-300 ease-in-out">
           <div className="flex flex-col h-full">
+            {/* Logo Section */}
+            <div className="flex items-center justify-center py-4 px-2">
+              <div className="text-center">
+                <img 
+                  src="/TCG3K.png" 
+                  alt="TCG3K Logo" 
+                  className="w-28 h-auto max-h-28 object-contain"
+                />
+              </div>
+            </div>
+            
             {/* Toggle Button */}
             <div className="flex justify-end p-2">
               <button className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">
@@ -43,7 +54,7 @@ export const Sidebar = React.memo(function Sidebar() {
               </button>
             </div>
             
-            <div className="flex flex-col justify-start flex-1 p-4 pt-8">
+            <div className="flex flex-col justify-start flex-1 p-4 pt-2">
               <nav className="space-y-6">
                 <a href="/" className="flex items-center justify-start px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white transition-colors">
                   <span>Home</span>
@@ -88,6 +99,17 @@ export const Sidebar = React.memo(function Sidebar() {
         isCollapsed ? 'w-0' : 'w-32'
       }`}>
         <div className="flex flex-col h-full w-32">
+          {/* Logo Section */}
+          <div className="flex items-center justify-center py-4 px-2">
+            <div className="text-center">
+              <img 
+                src="/TCG3K.png" 
+                alt="TCG3K Logo" 
+                className="w-28 h-auto max-h-28 object-contain"
+              />
+            </div>
+          </div>
+          
           {/* Toggle Button */}
           <div className="flex justify-end p-2">
             <button 
@@ -99,7 +121,7 @@ export const Sidebar = React.memo(function Sidebar() {
             </button>
           </div>
           
-          <div className="flex flex-col justify-start flex-1 p-4 pt-8">
+          <div className="flex flex-col justify-start flex-1 p-4 pt-2">
             <nav className="space-y-6">
               <a 
                 href="/" 

@@ -475,14 +475,14 @@ export default function PlayPage() {
               }
             }}
             disabled={hasCurrentGame}
-            className={`text-white border-0 ${
+            className={`text-white border-0 text-xs font-medium capitalize ${
               hasCurrentGame 
                 ? 'bg-gray-600 hover:bg-gray-600 cursor-not-allowed' 
-                : 'bg-green-600 hover:bg-green-700'
+                : 'bg-transparent hover:bg-transparent'
             }`}
           >
-            <Plus className="w-4 h-4 mr-2" />
             {hasCurrentGame ? 'Already in Game' : 'New Game'}
+            <Plus className="w-4 h-4 ml-2" />
           </Button>
           </div>
         </div>
@@ -539,7 +539,7 @@ export default function PlayPage() {
                     }
                   }}
                   disabled={hasCurrentGame}
-                  className={hasCurrentGame ? "bg-gray-600 hover:bg-gray-600" : "bg-green-600 hover:bg-green-700"}
+                  className={hasCurrentGame ? "bg-gray-600 hover:bg-gray-600" : "bg-transparent hover:bg-transparent"}
                 >
                   {hasCurrentGame ? 'Already in Game' : 'Create the First Game'}
                 </Button>
@@ -762,7 +762,7 @@ export default function PlayPage() {
               <Button 
                 onClick={handleCreateGame}
                 disabled={createGameMutation.isPending}
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-transparent hover:bg-transparent"
               >
                 {createGameMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Game'}
               </Button>

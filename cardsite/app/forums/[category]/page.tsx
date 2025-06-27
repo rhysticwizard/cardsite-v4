@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { 
   MessageCircle, 
   Users, 
@@ -25,7 +26,8 @@ import {
   ArrowLeft,
   Eye,
   Clock,
-  User
+  User,
+  Search
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -163,13 +165,66 @@ const sampleTopics = [
 ];
 
 interface CategoryPageProps {
-  params: {
+  params: Promise<{
     category: string;
-  };
+  }>;
 }
 
 export default function CategoryPage({ params }: CategoryPageProps) {
-  const category = forumCategories.find(cat => cat.slug === params.category);
+  const { category: categoryParam } = React.use(params);
+  const category = forumCategories.find(cat => cat.slug === categoryParam);
+  
+  // State for posts
+  const [posts, setPosts] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Helper function to format dates
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+      if (diffMins < 1) return 'just now';
+      if (diffMins < 60) return `${diffMins} minutes ago`;
+      if (diffHours < 24) return `${diffHours} hours ago`;
+      if (diffDays < 7) return `${diffDays} days ago`;
+      return date.toLocaleDateString();
+    } catch {
+      return 'unknown';
+    }
+  };
+
+  // Fetch posts for this category
+  useEffect(() => {
+    async function fetchPosts() {
+      try {
+        setIsLoading(true);
+        const response = await fetch(`/api/forums/posts?category=${categoryParam}&limit=20`);
+        const data = await response.json();
+        
+        if (response.ok) {
+          setPosts(data.posts || []);
+        } else {
+          console.error('Failed to fetch posts:', data.error);
+          setPosts(sampleTopics); // Fallback to sample data
+        }
+      } catch (error) {
+        console.error('Error fetching posts:', error);
+        setPosts(sampleTopics); // Fallback to sample data
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    if (categoryParam) {
+      fetchPosts();
+    }
+  }, [categoryParam]);
   
   if (!category) {
     return (
@@ -190,127 +245,108 @@ export default function CategoryPage({ params }: CategoryPageProps) {
   const IconComponent = category.icon;
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="min-h-screen bg-black">
+      <div className="max-w-5xl mx-auto px-6 py-8">
+      {/* Search Bar */}
+      <div className="mb-8">
+        <div className="relative max-w-xl mx-auto">
+          <Input
+            placeholder="Search topics and discussions..."
+            className="bg-black border-gray-600 text-white pl-4 pr-12 py-3 rounded-md focus:ring-0 focus:ring-offset-0 focus:border-gray-600 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-gray-600"
+          />
+          <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+        </div>
+      </div>
+
       {/* Breadcrumb Navigation */}
-      <div className="mb-6 flex items-center space-x-4 text-gray-400 text-sm">
-        <Link href="/forums" className="hover:text-white">Forums</Link>
-        <span>/</span>
-        <span className="text-white font-medium">{category.name}</span>
+      <div className="mb-6 flex items-center justify-between text-gray-400 text-sm">
+        <div className="flex items-center space-x-4">
+          <Link href="/forums" className="hover:text-white">Forums</Link>
+          <span>/</span>
+          <span className="text-white font-medium">{category.name}</span>
+        </div>
+        <Link href="/forums/create">
+          <Button className="bg-transparent hover:bg-transparent">
+            Create New Topic
+            <MessageCircle className="w-4 h-4 ml-1" />
+          </Button>
+        </Link>
       </div>
 
       {/* Break Line */}
       <hr className="border-gray-600 mb-6" />
 
-      {/* Category Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-4 mb-4">
-          <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center">
-            <IconComponent className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">{category.name}</h1>
-            <p className="text-gray-400">{category.description}</p>
-          </div>
-        </div>
-        
-        {/* Category Stats */}
-        <div className="flex items-center gap-6 text-sm text-gray-400">
-          <span>{category.topics}</span>
-          <span>•</span>
-          <span>{category.replies}</span>
-          <span>•</span>
-          <span>{category.participants}</span>
-        </div>
-      </div>
 
-      {/* Subcategories */}
-      <div className="mb-8">
-        <h2 className="text-lg font-semibold text-white mb-4">Subcategories</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {category.subcategories.map((sub, index) => {
-            const SubIcon = sub.icon;
-            return (
-              <Card key={index} className="bg-gray-900 border-gray-700 hover:border-gray-600 transition-colors cursor-pointer">
+
+      {/* Topics */}
+      <div className="mb-6">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            <span className="ml-2 text-gray-400">Loading posts...</span>
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="text-center py-8">
+            <MessageCircle className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-400 mb-2">No posts yet</h3>
+            <p className="text-gray-500 mb-4">Be the first to start a discussion in this category!</p>
+            <Link href="/forums/create">
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                Create First Post
+              </Button>
+            </Link>
+          </div>
+        ) : (
+          /* Topics List */
+          <div className="space-y-2">
+            {posts.map((post) => (
+              <Card key={post.id} className="bg-black border-gray-800 hover:border-gray-700 transition-colors">
                 <CardContent className="p-4">
-                  <div className="flex items-center gap-3 mb-2">
-                    <SubIcon className="w-5 h-5 text-gray-400" />
-                    <span className="text-white font-medium">{sub.name}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <span>{sub.topics}</span>
-                    <span>•</span>
-                    <span>{sub.replies}</span>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        {post.isPinned && (
+                          <Pin className="w-4 h-4 text-yellow-500" />
+                        )}
+                        <Link href={`/forums/post/${post.id}`}>
+                          <h3 className="text-white font-medium hover:text-blue-400 cursor-pointer">
+                            {post.title}
+                          </h3>
+                        </Link>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <User className="w-3 h-3" />
+                          {post.username || post.name || `User #${post.userId?.slice(-4) || 'Unknown'}`}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <MessageCircle className="w-3 h-3" />
+                          {post.replyCount || 0} replies
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Eye className="w-3 h-3" />
+                          {post.views || 0} views
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {formatDate(post.createdAt)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      {post.subcategory && (
+                        <div className="text-xs text-gray-500 mb-1">{post.subcategory}</div>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Recent Topics */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-white">Recent Topics</h2>
-          <Link href="/forums/create">
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <MessageCircle className="w-4 h-4 mr-2" />
-              Create New Topic
-            </Button>
-          </Link>
-        </div>
 
-        {/* Topics List */}
-        <div className="space-y-2">
-          {sampleTopics.map((topic) => (
-            <Card key={topic.id} className="bg-gray-900 border-gray-700 hover:border-gray-600 transition-colors">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      {topic.isPinned && (
-                        <Pin className="w-4 h-4 text-yellow-500" />
-                      )}
-                      <Link href={`/forums/post/${topic.id}`}>
-                        <h3 className="text-white font-medium hover:text-blue-400 cursor-pointer">
-                          {topic.title}
-                        </h3>
-                      </Link>
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <User className="w-3 h-3" />
-                        {topic.author}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MessageCircle className="w-3 h-3" />
-                        {topic.replies} replies
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Eye className="w-3 h-3" />
-                        {topic.views} views
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {topic.lastActivity}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs text-gray-500 mb-1">{topic.subcategory}</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      {/* Pagination */}
-      <div className="text-center">
-        <Button variant="outline" className="text-gray-400 border-gray-600 hover:bg-gray-800">
-          Load More Topics
-        </Button>
       </div>
     </div>
   );

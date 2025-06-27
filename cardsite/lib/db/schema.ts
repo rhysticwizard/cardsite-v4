@@ -142,6 +142,42 @@ export const deckCards = pgTable('deck_cards', {
   deckCategoryIdx: index('deck_cards_deck_category_idx').on(table.deckId, table.category),
 }))
 
+// User Collections (groups) - organized collections like decks but for collection management
+export const userCollections = pgTable('user_collections', {
+  id: varchar('id', { length: 12 }).primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull(),
+  name: varchar('name', { length: 255 }).notNull(),
+  description: text('description'),
+  format: varchar('format', { length: 50 }).notNull().default('standard'),
+  isPublic: boolean('is_public').notNull().default(false),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  userIdIdx: index('user_collections_user_id_idx').on(table.userId),
+  formatIdx: index('user_collections_format_idx').on(table.format),
+  publicIdx: index('user_collections_public_idx').on(table.isPublic),
+  createdAtIdx: index('user_collections_created_at_idx').on(table.createdAt),
+  // Performance indexes for 1M+ scale
+  userFormatIdx: index('user_collections_user_format_idx').on(table.userId, table.format),
+  userCreatedIdx: index('user_collections_user_created_idx').on(table.userId, table.createdAt),
+  userPublicCreatedIdx: index('user_collections_user_public_created_idx').on(table.userId, table.isPublic, table.createdAt),
+  publicCreatedIdx: index('user_collections_public_created_idx').on(table.isPublic, table.createdAt).where(eq(table.isPublic, true)),
+}))
+
+// User Collection Cards - tracks cards in user collections
+export const userCollectionCards = pgTable('user_collection_cards', {
+  id: varchar('id', { length: 12 }).primaryKey(),
+  collectionId: varchar('collection_id', { length: 12 }).notNull().references(() => userCollections.id, { onDelete: 'cascade' }),
+  cardId: uuid('card_id').notNull().references(() => cards.id, { onDelete: 'cascade' }),
+  quantity: integer('quantity').notNull().default(1),
+  category: varchar('category', { length: 50 }).notNull().default('mainboard'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  collectionIdIdx: index('user_collection_cards_collection_id_idx').on(table.collectionId),
+  cardIdIdx: index('user_collection_cards_card_id_idx').on(table.cardId),
+  collectionCategoryIdx: index('user_collection_cards_collection_category_idx').on(table.collectionId, table.category),
+}))
+
 // Game Rooms - for multiplayer MTG games
 export const gameRooms = pgTable('game_rooms', {
   id: varchar('id', { length: 12 }).primaryKey(),
@@ -266,6 +302,57 @@ export const verificationTokens = pgTable('verificationTokens', {
   expiresIdx: index('verification_tokens_expires_idx').on(table.expires),
 }))
 
+// Forum Posts - tracks forum posts and discussions
+export const forumPosts = pgTable('forum_posts', {
+  id: varchar('id', { length: 12 }).primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: varchar('title', { length: 255 }).notNull(),
+  content: text('content').notNull(),
+  category: varchar('category', { length: 50 }).notNull(),
+  subcategory: varchar('subcategory', { length: 100 }),
+  isPinned: boolean('is_pinned').notNull().default(false),
+  isLocked: boolean('is_locked').notNull().default(false),
+  views: integer('views').notNull().default(0),
+  replyCount: integer('reply_count').notNull().default(0),
+  lastReplyAt: timestamp('last_reply_at'),
+  lastReplyBy: varchar('last_reply_by', { length: 255 }).references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  // Forum post query indexes
+  userIdIdx: index('forum_posts_user_id_idx').on(table.userId),
+  categoryIdx: index('forum_posts_category_idx').on(table.category),
+  subcategoryIdx: index('forum_posts_subcategory_idx').on(table.subcategory),
+  createdAtIdx: index('forum_posts_created_at_idx').on(table.createdAt),
+  lastReplyAtIdx: index('forum_posts_last_reply_at_idx').on(table.lastReplyAt),
+  // Composite indexes for forum browsing
+  categoryCreatedIdx: index('forum_posts_category_created_idx').on(table.category, table.createdAt),
+  categoryLastReplyIdx: index('forum_posts_category_last_reply_idx').on(table.category, table.lastReplyAt),
+  pinnedIdx: index('forum_posts_pinned_idx').on(table.isPinned, table.createdAt),
+}))
+
+// Forum Comments - tracks replies to forum posts
+export const forumComments = pgTable('forum_comments', {
+  id: varchar('id', { length: 12 }).primaryKey(),
+  postId: varchar('post_id', { length: 12 }).notNull().references(() => forumPosts.id, { onDelete: 'cascade' }),
+  userId: varchar('user_id', { length: 255 }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),
+  parentId: varchar('parent_id', { length: 12 }), // For nested replies - will add reference later
+  isEdited: boolean('is_edited').notNull().default(false),
+  editedAt: timestamp('edited_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  // Comment query indexes
+  postIdIdx: index('forum_comments_post_id_idx').on(table.postId),
+  userIdIdx: index('forum_comments_user_id_idx').on(table.userId),
+  parentIdIdx: index('forum_comments_parent_id_idx').on(table.parentId),
+  createdAtIdx: index('forum_comments_created_at_idx').on(table.createdAt),
+  // Composite indexes for comment threading
+  postCreatedIdx: index('forum_comments_post_created_idx').on(table.postId, table.createdAt),
+  parentCreatedIdx: index('forum_comments_parent_created_idx').on(table.parentId, table.createdAt),
+}))
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   collections: many(collections),
@@ -280,6 +367,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   receivedFriendRequests: many(friendRequests, { relationName: 'receivedRequests' }),
   friendships1: many(friendships, { relationName: 'user1Friendships' }),
   friendships2: many(friendships, { relationName: 'user2Friendships' }),
+  forumPosts: many(forumPosts),
+  forumComments: many(forumComments),
 }))
 
 export const errorLogsRelations = relations(errorLogs, ({ one }) => ({
@@ -383,5 +472,36 @@ export const friendshipsRelations = relations(friendships, ({ one }) => ({
     fields: [friendships.user2Id],
     references: [users.id],
     relationName: 'user2Friendships',
+  }),
+}))
+
+export const forumPostsRelations = relations(forumPosts, ({ one, many }) => ({
+  user: one(users, {
+    fields: [forumPosts.userId],
+    references: [users.id],
+  }),
+  lastReplyUser: one(users, {
+    fields: [forumPosts.lastReplyBy],
+    references: [users.id],
+  }),
+  comments: many(forumComments),
+}))
+
+export const forumCommentsRelations = relations(forumComments, ({ one, many }) => ({
+  post: one(forumPosts, {
+    fields: [forumComments.postId],
+    references: [forumPosts.id],
+  }),
+  user: one(users, {
+    fields: [forumComments.userId],
+    references: [users.id],
+  }),
+  parent: one(forumComments, {
+    fields: [forumComments.parentId],
+    references: [forumComments.id],
+    relationName: 'parentComment',
+  }),
+  replies: many(forumComments, {
+    relationName: 'parentComment',
   }),
 })) 
